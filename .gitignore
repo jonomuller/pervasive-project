@@ -1,0 +1,5 @@
+*.a
+*.bin
+*.elf
+*.map
+obj_srf06-cc26xx/
