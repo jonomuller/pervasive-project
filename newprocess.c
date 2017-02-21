@@ -8,9 +8,9 @@
 #include "batmon-sensor.h"
 #include "board-peripherals.h"
 #include "rf-core/rf-ble.h"
-
+#include "packetbuf.h"
 #include "ti-lib.h"
-
+#include "net/rime/rime.h"
 #include <stdio.h>
 #include <stdint.h>
 /*---------------------------------------------------------------------------*/
@@ -41,13 +41,18 @@
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
-
-  static void
-init_tmp_reading()
+/*---------------------------------------------------------------------------*/
+static struct broadcast_conn broadcast;
+static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
-  SENSORS_ACTIVATE(bmp_280_sensor);
+  leds_toggle(LEDS_RED);
+  printf("broadcast message received from %d.%d: '%s'\n",from->u8[0], from->u8[1],
+      (char *)packetbuf_dataptr());
 }
+static const struct broadcast_callbacks broadcast_call = {broadcast_recv};
+/*---------------------------------------------------------------------------*/
 
+static struct broadcast_conn broadcast;
 
 PROCESS(example_process, "Example process");
 AUTOSTART_PROCESSES(&example_process);
@@ -55,26 +60,24 @@ AUTOSTART_PROCESSES(&example_process);
 PROCESS_THREAD(example_process, ev, data)
 {
   static struct etimer et;
+
+  PROCESS_EXITHANDLER(broadcast_close(&broadcast));
+
   PROCESS_BEGIN();
-  init_tmp_reading();
 
-  /* Delay 1 second */
-  etimer_set(&et, CLOCK_SECOND);
+  broadcast_open(&broadcast, 129, &broadcast_call);
+
   while(1) {
+
+    /* Delay 2-4 seconds */
+    etimer_set(&et, CLOCK_SECOND * 4 + random_rand() % (CLOCK_SECOND * 4));
+
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
-    int value;
-		init_tmp_reading();
-    /* Reset the etimer to trig again in 1 second */
-    etimer_reset(&et);
-    leds_toggle(LEDS_RED);
-		value = bmp_280_sensor.value(BMP_280_SENSOR_TYPE_TEMP);
 
-		printf("BAR: Temp=%d.%02d C\n", value / 100, value % 100);
+    packetbuf_copyfrom("Jono is a waste", 15);
+    broadcast_send(&broadcast);
+    printf("broadcast message sent\n");
 
-		SENSORS_DEACTIVATE(bmp_280_sensor);
-
-
-    /* ... */
-  }
+    }
   PROCESS_END();
 }
