@@ -1,7 +1,7 @@
 
-DEFINES+=PROJECT_CONF_H=\"project-conf.h\"
+DEFINES+=PROJECT_CONF_H=\"../project-conf.h\"
 PROJECT_SOURCEFILES += hid_leds.c
-CONTIKI_PROJECT = newprocess
+CONTIKI_PROJECT = light
 
 TARGET = srf06-cc26xx
 BOARD=sensortag/cc2650
@@ -11,7 +11,7 @@ CONTIKI_WITH_RIME=1
 
 all: $(CONTIKI_PROJECT)
 
-CONTIKI=../..
+CONTIKI=../../../
 
 
 include $(CONTIKI)/Makefile.include

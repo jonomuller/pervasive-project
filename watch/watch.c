@@ -13,7 +13,6 @@
 #include "net/rime/rime.h"
 #include <stdio.h>
 #include <stdint.h>
-#include "hid_leds.h"
 /*---------------------------------------------------------------------------*/
 #define CC26XX_DEMO_LOOP_INTERVAL       (CLOCK_SECOND * 20)
 #define CC26XX_DEMO_LEDS_PERIODIC       LEDS_YELLOW
@@ -65,32 +64,11 @@ PROCESS_THREAD(example_process, ev, data)
   PROCESS_EXITHANDLER(broadcast_close(&broadcast));
 
   PROCESS_BEGIN();
-  
-  // change channel from 129 to 135
-  broadcast_open(&broadcast, 135, &broadcast_call);
-  hid_on();
+
+  broadcast_open(&broadcast, 129, &broadcast_call);
   while(1) {
-    hid_set_colour_white();
-    hid_set_intensity(0);
-    /* Delay 2-4 seconds */
-    etimer_set(&et, CLOCK_SECOND * 4 + random_rand() % (CLOCK_SECOND * 4));
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
-
-    hid_set_intensity(20);
-    /* Delay 2-4 seconds */
-    etimer_set(&et, CLOCK_SECOND * 4 + random_rand() % (CLOCK_SECOND * 4));
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
-
-    hid_set_intensity(40);
-    /* Delay 2-4 seconds */
-    etimer_set(&et, CLOCK_SECOND * 4 + random_rand() % (CLOCK_SECOND * 4));
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
-
-    hid_set_intensity(60);
-
     leds_toggle(LEDS_ALL);
-    hid_set_colour_red();
-    packetbuf_copyfrom("test message", 15);
+    packetbuf_copyfrom("Jono is a waste", 15);
     broadcast_send(&broadcast);
     printf("broadcast message sent\n");
     leds_toggle(LEDS_ALL);
