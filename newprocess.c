@@ -65,8 +65,9 @@ PROCESS_THREAD(example_process, ev, data)
   PROCESS_EXITHANDLER(broadcast_close(&broadcast));
 
   PROCESS_BEGIN();
-
-  broadcast_open(&broadcast, 129, &broadcast_call);
+  
+  // change channel from 129 to 135
+  broadcast_open(&broadcast, 135, &broadcast_call);
   hid_on();
   while(1) {
     hid_set_colour_blue();
@@ -76,7 +77,7 @@ PROCESS_THREAD(example_process, ev, data)
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
     leds_toggle(LEDS_ALL);
     hid_set_colour_red();
-    packetbuf_copyfrom("Jono is a waste", 15);
+    packetbuf_copyfrom("test message", 15);
     broadcast_send(&broadcast);
     printf("broadcast message sent\n");
     leds_toggle(LEDS_ALL);
