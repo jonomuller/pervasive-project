@@ -87,7 +87,13 @@ void led_pwm_update(int freq, uint32_t ioid_pin) {
  */
 
 void hid_set_intensity(int percent)  {
-  intensity = 12000/100 * percent;
+  if (percent < 0)  {
+    percent = 1;
+  }
+  if(percent > 100)  {
+    percent = 100;
+  }
+  intensity = 12000/100 * (100-percent);
   led_pwm_update(intensity, led_pin);
 }
 
