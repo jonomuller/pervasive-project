@@ -4,7 +4,7 @@
 
 LPM_MODULE(led_module, NULL, NULL, NULL, LPM_DOMAIN_PERIPH);
 uint32_t led_pin = DEV_LED_IOID_WHITE;
-int intensity = 100;
+int intensity = 1000;
 
 
 /*
@@ -114,4 +114,12 @@ void hid_set_colour_red() {
   led_pwm_stop(led_pin);
   led_pin = DEV_LED_IOID_RED;
   led_pwm_start(intensity,led_pin);
+}
+
+void hid_on()  {
+  led_pwm_start(intensity, led_pin);
+}
+
+void hid_off()  {
+  led_pwm_stop(led_pin);
 }

@@ -1,6 +1,6 @@
 
 DEFINES+=PROJECT_CONF_H=\"project-conf.h\"
-
+PROJECT_SOURCEFILES += hid_leds.c
 CONTIKI_PROJECT = newprocess
 
 TARGET = srf06-cc26xx
