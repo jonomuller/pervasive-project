@@ -1,9 +1,17 @@
+#define SYSTEM_CODE 123456
+#define BROADCAST_CHANNEL 135
+
+#define NODE_TYPE_WATCH 0
+#define NODE_TYPE_LIGHT 1
+
 #define COLOUR_CODE_WHITE 0
 #define COLOUR_CODE_RED 1
 #define COLOUR_CODE_GREEN 2
 #define COLOUR_CODE_BLUE 3
 
 #define ON_PACKET 100
+#define OFF_PACKET 200
+#define LIGHT_SETTINGS_PACKET 300
 
 
 
@@ -23,15 +31,10 @@ typedef struct {
 } data_packet_header;
 
 typedef struct {
-  bool light_on;
   int light_colour;
   int light_intensity;
-} watch_to_light_packet;
+} light_settings_packet;
 
-typedef struct {
-  data_packet_header header;
-  watch_to_light_packet data;
-} data_packet;
 
 
 
