@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "hid_leds.h"
+#include "net/rime/timesynch.h"
+
 /*---------------------------------------------------------------------------*/
 #define CC26XX_DEMO_LOOP_INTERVAL       (CLOCK_SECOND * 20)
 #define CC26XX_DEMO_LEDS_PERIODIC       LEDS_YELLOW
@@ -46,6 +48,11 @@
 static struct broadcast_conn broadcast;
 static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
+  rtimer_clock_t start_time = packetbuf_dataptr();
+  int end_time = (int) timesynch_time();
+  // int difference = end_time - start_time;
+  int difference = 0;
+  printf("start: %s, end: %d, difference: %d\n", start_time, end_time, difference);
   leds_toggle(LEDS_RED);
   printf("broadcast message received from %d.%d: '%s'\n",from->u8[0], from->u8[1],
       (char *)packetbuf_dataptr());
@@ -61,17 +68,26 @@ AUTOSTART_PROCESSES(&example_process);
 PROCESS_THREAD(example_process, ev, data)
 {
   static struct etimer et;
+  timesynch_init();
 
   PROCESS_EXITHANDLER(broadcast_close(&broadcast));
 
   PROCESS_BEGIN();
 
-  broadcast_open(&broadcast, 129, &broadcast_call);
+  broadcast_open(&broadcast, 135, &broadcast_call);
   hid_on();
   while(1) {
+    etimer_set(&et, CLOCK_SECOND * 4 + random_rand() % (CLOCK_SECOND * 4));
+    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
     leds_toggle(LEDS_ALL);
-    packetbuf_copyfrom("Jono is a waste", 15);
+
+    rtimer_clock_t *time = timesynch_time();
+    printf("%p", time);
+    packetbuf_copyfrom(time, sizeof(time));
+    packetbuf_set_attr(PACKETBUF_ATTR_PACKET_TYPE,
+                       PACKETBUF_ATTR_PACKET_TYPE_TIMESTAMP);
     broadcast_send(&broadcast);
+
     printf("broadcast message sent\n");
     leds_toggle(LEDS_ALL);
 
