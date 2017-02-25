@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "hid_leds.h"
+#include "../protocol.h"
 /*---------------------------------------------------------------------------*/
 #define CC26XX_DEMO_LOOP_INTERVAL       (CLOCK_SECOND * 20)
 #define CC26XX_DEMO_LEDS_PERIODIC       LEDS_YELLOW
@@ -46,9 +47,36 @@
 static struct broadcast_conn broadcast;
 static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
-  leds_toggle(LEDS_RED);
-  printf("broadcast message received from %d.%d: '%s'\n",from->u8[0], from->u8[1],
-      (char *)packetbuf_dataptr());
+  data_packet data_received;
+  memcpy(&data_received,packetbuf_dataptr(),sizeof(data_packet));
+  if (data_received.header.system_code == 123456)  {
+    printf("received light system packet \n");
+    if (data_received.header.packet_type == ON_PACKET)  {
+      printf("On/Off packet \n");
+      if (data_received.data.light_on == true)  {
+        hid_on();
+        printf("received on \n");
+        if (data_received.data.light_colour == COLOUR_CODE_WHITE)  {
+          hid_set_colour_white();
+        }
+        if (data_received.data.light_colour == COLOUR_CODE_RED)  {
+          hid_set_colour_red();
+        }
+        if (data_received.data.light_colour == COLOUR_CODE_BLUE)  {
+          hid_set_colour_blue();
+        }
+        if (data_received.data.light_colour == COLOUR_CODE_GREEN)  {
+          hid_set_colour_green();
+        }
+        hid_set_intensity(data_received.data.light_intensity);
+      } else {
+        hid_off();
+        printf("received off \n");
+      }
+    }
+
+
+  }
 }
 static const struct broadcast_callbacks broadcast_call = {broadcast_recv};
 /*---------------------------------------------------------------------------*/
@@ -60,21 +88,11 @@ AUTOSTART_PROCESSES(&example_process);
 
 PROCESS_THREAD(example_process, ev, data)
 {
-  static struct etimer et;
 
   PROCESS_EXITHANDLER(broadcast_close(&broadcast));
 
   PROCESS_BEGIN();
 
-  broadcast_open(&broadcast, 129, &broadcast_call);
-  hid_on();
-  while(1) {
-    leds_toggle(LEDS_ALL);
-    packetbuf_copyfrom("Jono is a waste", 15);
-    broadcast_send(&broadcast);
-    printf("broadcast message sent\n");
-    leds_toggle(LEDS_ALL);
-
-    }
+  broadcast_open(&broadcast, 135, &broadcast_call);
   PROCESS_END();
 }

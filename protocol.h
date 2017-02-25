@@ -1,3 +1,16 @@
+#define COLOUR_CODE_WHITE 0
+#define COLOUR_CODE_RED 1
+#define COLOUR_CODE_GREEN 2
+#define COLOUR_CODE_BLUE 3
+
+#define ON_PACKET 100
+
+
+
+
+
+
+
 /*
  * Structs for sending messages between nodes
  *

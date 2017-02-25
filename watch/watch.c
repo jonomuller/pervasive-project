@@ -41,16 +41,7 @@
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-
-/*---------------------------------------------------------------------------*/
-static struct broadcast_conn broadcast;
-static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
-{
-  leds_toggle(LEDS_RED);
-  printf("broadcast message received from %d.%d: '%s'\n",from->u8[0], from->u8[1],
-      (char *)packetbuf_dataptr());
-}
-static const struct broadcast_callbacks broadcast_call = {broadcast_recv};
+static const struct broadcast_callbacks broadcast_call;
 /*---------------------------------------------------------------------------*/
 
 static struct broadcast_conn broadcast;
@@ -58,30 +49,31 @@ static struct broadcast_conn broadcast;
 PROCESS(example_process, "Example process");
 AUTOSTART_PROCESSES(&example_process);
 
+bool switch_pos = false;
 PROCESS_THREAD(example_process, ev, data)
 {
-  static struct etimer et;
 
   PROCESS_EXITHANDLER(broadcast_close(&broadcast));
 
   PROCESS_BEGIN();
-
   broadcast_open(&broadcast, 135, &broadcast_call);
   while(1) {
     PROCESS_WAIT_EVENT_UNTIL(ev == sensors_event);
     if (data == CC26XX_DEMO_SENSOR_1)  {
+      packetbuf_clear();
+      switch_pos = !switch_pos;
       data_packet_header header;
       header.system_code = 123456;
       header.source_node_type = 0;
-      header.packet_type = 100;
+      header.packet_type = ON_PACKET;
       watch_to_light_packet packet;
-      packet.light_on = true;
+      packet.light_on = switch_pos;
       packet.light_colour = 1;
       packet.light_intensity = 100;
       data_packet data_to_send = { header, packet};
       packetbuf_copyfrom(&data_to_send,sizeof(data_packet));
       broadcast_send(&broadcast);
-      printf("on signal sent");
+      switch_pos? printf("on signal sent"): printf("off signal sent");
     }
   }
   PROCESS_END();
