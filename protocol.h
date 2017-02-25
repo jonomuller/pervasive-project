@@ -3,13 +3,13 @@
  *
  */
 
-struct {
+typedef struct {
   int system_code;
   int source_node_type;
   int packet_type;
 } data_packet_header;
 
-struct {
+typedef struct {
   bool light_on;
   int light_colour;
   int light_intensity;
