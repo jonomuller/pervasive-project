@@ -13,6 +13,7 @@
 #include "net/rime/rime.h"
 #include <stdio.h>
 #include <stdint.h>
+#include "../protocol.h"
 /*---------------------------------------------------------------------------*/
 #define CC26XX_DEMO_LOOP_INTERVAL       (CLOCK_SECOND * 20)
 #define CC26XX_DEMO_LEDS_PERIODIC       LEDS_YELLOW
@@ -67,12 +68,18 @@ PROCESS_THREAD(example_process, ev, data)
 
   broadcast_open(&broadcast, 129, &broadcast_call);
   while(1) {
-    leds_toggle(LEDS_ALL);
-    packetbuf_copyfrom("Jono is a waste", 15);
-    broadcast_send(&broadcast);
-    printf("broadcast message sent\n");
-    leds_toggle(LEDS_ALL);
-
+    PROCESS_WAIT_EVENT_UNTIL(ev == sensors_event)  {
+      if (data == CC26XX_DEMO_SENSOR_1)  {
+        data_packet_header header;
+        header.system_code = 123456;
+        header.source_node_type = 0;
+        header.packet_type = 100;
+        watch_to_light_packet packet;
+        packet.light_on = true;
+        packet.light_colour = 1;
+        packet.light_intensity = 100;
+        packetbuf_copyfrom
     }
+  }
   PROCESS_END();
 }
