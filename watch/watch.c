@@ -98,6 +98,7 @@ PROCESS_THREAD(watch_process, ev, data)
         memcpy(&packet+sizeof(data_packet_header),&settings,
             sizeof(light_settings_packet));
         packetbuf_copyfrom(&packet,packet_size);
+        printf("got here");
         mmem_free(&mmem);
         broadcast_send(&broadcast);
       }

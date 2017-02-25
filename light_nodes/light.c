@@ -42,40 +42,56 @@
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+// Default light settings
 
+bool light_on = false;
+int light_colour = COLOUR_CODE_WHITE;
+int light_intensity = 100;
+light_settings_packet settings;
 /*---------------------------------------------------------------------------*/
 static struct broadcast_conn broadcast;
 static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
-  data_packet data_received;
-  memcpy(&data_received,packetbuf_dataptr(),sizeof(data_packet));
-  if (data_received.header.system_code == 123456)  {
+  // Lets determine the type of packet received
+  data_packet_header data_header;
+  memcpy(&data_header,packetbuf_dataptr(),sizeof(data_packet_header));
+  if (data_header.system_code == SYSTEM_CODE)  {
     printf("received light system packet \n");
-    if (data_received.header.packet_type == ON_PACKET)  {
-      printf("On/Off packet \n");
-      if (data_received.data.light_on == true)  {
+    switch (data_header.packet_type)  {
+      case LIGHT_SETTINGS_PACKET:
+        printf("received new light settings \n");
+        memcpy(&settings, packetbuf_dataptr()+sizeof(data_packet_header)
+            , sizeof(light_settings_packet));
+        if (light_on) hid_off();
+        light_colour = settings.light_colour;
+        light_intensity = settings.light_intensity;
+        if (!light_on) break;
+      case ON_PACKET:
         hid_on();
-        printf("received on \n");
-        if (data_received.data.light_colour == COLOUR_CODE_WHITE)  {
+        printf("Received On command \n");
+        if (light_colour == COLOUR_CODE_WHITE)  {
           hid_set_colour_white();
         }
-        if (data_received.data.light_colour == COLOUR_CODE_RED)  {
+        if (light_colour == COLOUR_CODE_RED)  {
           hid_set_colour_red();
         }
-        if (data_received.data.light_colour == COLOUR_CODE_BLUE)  {
+        if (light_colour == COLOUR_CODE_BLUE)  {
           hid_set_colour_blue();
         }
-        if (data_received.data.light_colour == COLOUR_CODE_GREEN)  {
+        if (light_colour == COLOUR_CODE_GREEN)  {
           hid_set_colour_green();
         }
-        hid_set_intensity(data_received.data.light_intensity);
-      } else {
+        hid_set_intensity(light_intensity);
+        light_on = true;
+        break;
+      case OFF_PACKET:
         hid_off();
-        printf("received off \n");
-      }
+        light_on = false;
+        printf("Received Off command\n");
+        break;
+      default:
+        break;
     }
-
-
   }
 }
 static const struct broadcast_callbacks broadcast_call = {broadcast_recv};
