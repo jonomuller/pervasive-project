@@ -15,6 +15,10 @@ typedef struct {
   int light_intensity;
 } watch_to_light_packet;
 
+typedef struct {
+  data_packet_header header;
+  watch_to_light_packet data;
+} data_packet;
 
 
 

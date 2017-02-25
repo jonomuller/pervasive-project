@@ -66,19 +66,22 @@ PROCESS_THREAD(example_process, ev, data)
 
   PROCESS_BEGIN();
 
-  broadcast_open(&broadcast, 129, &broadcast_call);
+  broadcast_open(&broadcast, 135, &broadcast_call);
   while(1) {
-    PROCESS_WAIT_EVENT_UNTIL(ev == sensors_event)  {
-      if (data == CC26XX_DEMO_SENSOR_1)  {
-        data_packet_header header;
-        header.system_code = 123456;
-        header.source_node_type = 0;
-        header.packet_type = 100;
-        watch_to_light_packet packet;
-        packet.light_on = true;
-        packet.light_colour = 1;
-        packet.light_intensity = 100;
-        packetbuf_copyfrom
+    PROCESS_WAIT_EVENT_UNTIL(ev == sensors_event);
+    if (data == CC26XX_DEMO_SENSOR_1)  {
+      data_packet_header header;
+      header.system_code = 123456;
+      header.source_node_type = 0;
+      header.packet_type = 100;
+      watch_to_light_packet packet;
+      packet.light_on = true;
+      packet.light_colour = 1;
+      packet.light_intensity = 100;
+      data_packet data_to_send = { header, packet};
+      packetbuf_copyfrom(&data_to_send,sizeof(data_packet));
+      broadcast_send(&broadcast);
+      printf("on signal sent");
     }
   }
   PROCESS_END();
