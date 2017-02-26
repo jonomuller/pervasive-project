@@ -54,6 +54,7 @@ light_settings_packet settings;
 light_time_packet node_packet;
 
 float rssi_from_watch = -INFINITY;
+int watch_timestamp = 0;
 float rssis[2];
 int rssi_count = 0;
 
@@ -117,10 +118,10 @@ static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
         printf("Received Off command\n");
         break;
       case WATCH_ANNOUNCE_PACKET:
-        int timestamp = packetbuf_attr(PACKETBUF_ATTR_TIMESTAMP);
+        watch_timestamp = packetbuf_attr(PACKETBUF_ATTR_TIMESTAMP);
         rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536;
         clock_wait(0.5);
-        broadcast_time_packet(timestamp, rssi_from_watch);
+        broadcast_time_packet(watch_timestamp, rssi_from_watch);
       case INTER_NODE_PACKET:
         memcpy(&node_packet, packetbuf_dataptr()+sizeof(data_packet_header),
           sizeof(light_time_packet));
