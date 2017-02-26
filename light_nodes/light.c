@@ -48,6 +48,19 @@ bool light_on = false;
 int light_colour = COLOUR_CODE_WHITE;
 int light_intensity = 100;
 light_settings_packet settings;
+float rssis[5];
+
+void
+broadcast_time_packet(int timestamp)
+{
+  light_time_packet packet;
+  packet.packet_type = INTER_NODE_PACKET;
+  packet.timestamp = timestamp;
+  packetbuf_copyfrom(&packet, sizeof(light_time_packet));
+  broadcast_send(&broadcast);
+}
+
+
 /*---------------------------------------------------------------------------*/
 static struct broadcast_conn broadcast;
 static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
@@ -89,8 +102,13 @@ static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
         light_on = false;
         printf("Received Off command\n");
         break;
-      case WATCH_ANNOUNCE:
-        // handle watch announce
+      case WATCH_ANNOUNCE_PACKET:
+        int timestamp = packetbuf_attr(PACKETBUF_ATTR_TIMESTAMP);
+        float rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536;
+        clock_wait(0.5);
+        broadcast_time_packet(timestamp);
+      case INTER_NODE_PACKET:
+        // keep track of rssi of other nodes
       default:
         break;
     }
