@@ -15,6 +15,9 @@
 #include <stdint.h>
 #include "hid_leds.h"
 #include "../protocol.h"
+#include <math.h>
+
+
 /*---------------------------------------------------------------------------*/
 #define CC26XX_DEMO_LOOP_INTERVAL       (CLOCK_SECOND * 20)
 #define CC26XX_DEMO_LEDS_PERIODIC       LEDS_YELLOW
@@ -48,21 +51,32 @@ bool light_on = false;
 int light_colour = COLOUR_CODE_WHITE;
 int light_intensity = 100;
 light_settings_packet settings;
-float rssis[5];
+light_time_packet node_packet;
+
+float rssi_from_watch = -INFINITY;
+float rssis[2];
+int rssi_count = 0;
+
+static struct broadcast_conn broadcast;
 
 void
-broadcast_time_packet(int timestamp)
+broadcast_time_packet(int timestamp, float rssi)
 {
+  data_packet_header header;
+  header.system_code = SYSTEM_CODE;
+  header.source_node_type = 1;
+  header.packet_type = LIGHT_SETTINGS_PACKET;
   light_time_packet packet;
-  packet.packet_type = INTER_NODE_PACKET;
   packet.timestamp = timestamp;
+  packet.rssi = rssi;
+  // memory stuff might not work here
   packetbuf_copyfrom(&packet, sizeof(light_time_packet));
   broadcast_send(&broadcast);
 }
 
 
 /*---------------------------------------------------------------------------*/
-static struct broadcast_conn broadcast;
+
 static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
   // Lets determine the type of packet received
@@ -104,11 +118,31 @@ static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
         break;
       case WATCH_ANNOUNCE_PACKET:
         int timestamp = packetbuf_attr(PACKETBUF_ATTR_TIMESTAMP);
-        float rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536;
+        rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536;
         clock_wait(0.5);
-        broadcast_time_packet(timestamp);
+        broadcast_time_packet(timestamp, rssi_from_watch);
       case INTER_NODE_PACKET:
-        // keep track of rssi of other nodes
+        memcpy(&node_packet, packetbuf_dataptr()+sizeof(data_packet_header),
+          sizeof(light_time_packet));
+
+        float rssi = node_packet.rssi;
+        rssis[rssi_count] = rssi;
+        rssi_count++;
+        bool closest = true;
+
+        // check if array of other nodes is full
+        if (rssi_count == 2) {
+          for (int i = 0; i < rssi_count; i++) {
+            if (rssis[i] > rssi_from_watch) {
+              closest = false;
+            }
+          }
+        }
+
+        // if node is closest to watch, turn on light
+        if (closest) {
+          hid_on();
+        }
       default:
         break;
     }

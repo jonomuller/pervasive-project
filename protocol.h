@@ -38,8 +38,8 @@ typedef struct {
 } light_settings_packet;
 
 typedef struct {
-  int packet_type;
   int timestamp;
+  float rssi;
 } light_time_packet;
 
 

@@ -67,7 +67,7 @@ PROCESS_THREAD(watch_process, ev, data)
     data_packet_header announcer;
     announcer.system_code = SYSTEM_CODE;
     announcer.source_node_type = 0;
-    announcer.packet_type = WATCH_ANNOUNCE;
+    announcer.packet_type = WATCH_ANNOUNCE_PACKET;
     packetbuf_copyfrom(&announcer, sizeof(data_packet_header));
     broadcast_send(&broadcast);
 
