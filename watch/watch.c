@@ -54,6 +54,7 @@ bool switch_pos = false;
 int current_colour = COLOUR_CODE_WHITE;
 int current_intensity = 100;
 static struct mmem mmem;
+
 PROCESS_THREAD(watch_process, ev, data)
 {
 
@@ -63,6 +64,14 @@ PROCESS_THREAD(watch_process, ev, data)
   mmem_init();
   broadcast_open(&broadcast, BROADCAST_CHANNEL, &broadcast_call);
   while(1) {
+    data_packet_header announcer;
+    announcer.system_code = SYSTEM_CODE;
+    announcer.source_node_type = 0;
+    announcer.packet_type = WATCH_ANNOUNCE;
+    packetbuf_copyfrom(&announcer, sizeof(data_packet_header));
+    broadcast_send(&broadcast);
+
+
     PROCESS_WAIT_EVENT_UNTIL(ev == sensors_event);
     if (data == CC26XX_DEMO_SENSOR_1)  {
       // Light switch button press

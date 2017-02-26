@@ -89,6 +89,8 @@ static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
         light_on = false;
         printf("Received Off command\n");
         break;
+      case WATCH_ANNOUNCE:
+        // handle watch announce
       default:
         break;
     }

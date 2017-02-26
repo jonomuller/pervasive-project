@@ -12,6 +12,7 @@
 #define ON_PACKET 100
 #define OFF_PACKET 200
 #define LIGHT_SETTINGS_PACKET 300
+#define WATCH_ANNOUNCE 400
 
 
 
