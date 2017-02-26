@@ -14,7 +14,7 @@
 #define LIGHT_SETTINGS_PACKET 300
 #define WATCH_ANNOUNCE_PACKET 400
 #define INTER_NODE_PACKET 500
-
+#define ANNOUNCE_CLOSEST_PACKET 600
 
 
 
@@ -42,6 +42,9 @@ typedef struct {
   float rssi;
 } light_time_packet;
 
+typedef struct {
+  int timestamp;
+} announce_packet;
 
 
 
