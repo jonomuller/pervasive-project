@@ -39,6 +39,9 @@
 #define CC26XX_DEMO_SENSOR_4     &button_down_sensor
 #define CC26XX_DEMO_SENSOR_5     &button_select_sensor
 #endif
+#define DEBUG DEBUG_FULL
+
+
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -53,16 +56,13 @@ AUTOSTART_PROCESSES(&watch_process);
 bool switch_pos = false;
 int current_colour = COLOUR_CODE_WHITE;
 int current_intensity = 100;
-static struct mmem mmem;
-
 PROCESS_THREAD(watch_process, ev, data)
 {
-
+  static struct mmem mmem;
   PROCESS_EXITHANDLER(broadcast_close(&broadcast));
-
   PROCESS_BEGIN();
-  mmem_init();
   broadcast_open(&broadcast, BROADCAST_CHANNEL, &broadcast_call);
+  mmem_init();
   while(1) {
     data_packet_header announcer;
     announcer.system_code = SYSTEM_CODE;
@@ -97,18 +97,18 @@ PROCESS_THREAD(watch_process, ev, data)
       light_settings_packet settings;
       settings.light_colour = current_colour;
       settings.light_intensity = current_intensity;
+
       int packet_size = sizeof(data_packet_header)
           + sizeof(light_settings_packet);
       if(mmem_alloc(&mmem, packet_size) == 0) {
         printf("memory allocation failed\n");
       } else {
-        void * packet = MMEM_PTR(&mmem);;
-        memcpy(&packet,&header,sizeof(data_packet_header));
-        memcpy(&packet+sizeof(data_packet_header),&settings,
+        char * packet = (char *) MMEM_PTR(&mmem);
+        memcpy(packet,&header,sizeof(data_packet_header));
+        memcpy(packet+sizeof(data_packet_header),&settings,
             sizeof(light_settings_packet));
-        packetbuf_copyfrom(&packet,packet_size);
-        printf("got here");
-        mmem_free(&mmem);
+        void * void_ptr = (void *) packet;
+        packetbuf_copyfrom(void_ptr,packet_size);
         broadcast_send(&broadcast);
       }
     }

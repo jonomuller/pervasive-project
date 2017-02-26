@@ -88,8 +88,9 @@ static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
     switch (data_header.packet_type)  {
       case LIGHT_SETTINGS_PACKET:
         printf("received new light settings \n");
-        memcpy(&settings, packetbuf_dataptr()+sizeof(data_packet_header)
-            , sizeof(light_settings_packet));
+        char * data_pt = (char*) packetbuf_dataptr();
+        memcpy(&settings,data_pt+sizeof(data_packet_header)
+            ,sizeof(light_settings_packet));
         if (light_on) hid_off();
         light_colour = settings.light_colour;
         light_intensity = settings.light_intensity;
