@@ -50,13 +50,13 @@ static const struct broadcast_callbacks broadcast_call;
 
 static struct broadcast_conn broadcast;
 
-PROCESS(watch_process, "Watch process");
-AUTOSTART_PROCESSES(&watch_process);
+PROCESS(watch_button_process, "Watch process");
+AUTOSTART_PROCESSES(&watch_button_process);
 
 bool switch_pos = false;
 int current_colour = COLOUR_CODE_WHITE;
 int current_intensity = 100;
-PROCESS_THREAD(watch_process, ev, data)
+PROCESS_THREAD(watch_button_process, ev, data)
 {
   static struct mmem mmem;
   PROCESS_EXITHANDLER(broadcast_close(&broadcast));
@@ -64,14 +64,6 @@ PROCESS_THREAD(watch_process, ev, data)
   broadcast_open(&broadcast, BROADCAST_CHANNEL, &broadcast_call);
   mmem_init();
   while(1) {
-    data_packet_header announcer;
-    announcer.system_code = SYSTEM_CODE;
-    announcer.source_node_type = 0;
-    announcer.packet_type = WATCH_ANNOUNCE_PACKET;
-    packetbuf_copyfrom(&announcer, sizeof(data_packet_header));
-    broadcast_send(&broadcast);
-
-
     PROCESS_WAIT_EVENT_UNTIL(ev == sensors_event);
     if (data == CC26XX_DEMO_SENSOR_1)  {
       // Light switch button press
