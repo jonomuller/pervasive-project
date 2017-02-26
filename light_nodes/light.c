@@ -78,7 +78,7 @@ broadcast_time_packet(int timestamp, float rssi)
 
 /*---------------------------------------------------------------------------*/
 
-static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
+static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
   // Lets determine the type of packet received
   data_packet_header data_header;
@@ -150,21 +150,74 @@ static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
     }
   }
 }
-static const struct broadcast_callbacks broadcast_call = {broadcast_recv};
+
+/*---------------------------------------------------------------------------*/
+static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
+{
+  // Lets determine the type of packet received
+  data_packet_header data_header;
+  memcpy(&data_header,packetbuf_dataptr(),sizeof(data_packet_header));
+  if (data_header.system_code == SYSTEM_CODE)  {
+    printf("received light system packet \n");
+    switch (data_header.packet_type)  {
+      case INTER_NODE_PACKET:
+        memcpy(&node_packet, packetbuf_dataptr()+sizeof(data_packet_header),
+          sizeof(light_time_packet));
+
+        float rssi = node_packet.rssi;
+        rssis[rssi_count] = rssi;
+        rssi_count++;
+        bool closest = true;
+
+        // check if array of other nodes is full
+        if (rssi_count == 2) {
+          for (int i = 0; i < rssi_count; i++) {
+            if (rssis[i] > rssi_from_watch) {
+              closest = false;
+            }
+          }
+        }
+
+        // if node is closest to watch, turn on light
+        if (closest) {
+          hid_on();
+        }
+      default:
+        break;
+    }
+  }
+}
+/*---------------------------------------------------------------------------*/
+static const struct broadcast_callbacks watch_callbacks = {watch_recv};
+static const struct broadcast_callbacks internode_callbacks = {internode_recv};
 /*---------------------------------------------------------------------------*/
 
 static struct broadcast_conn broadcast;
 
-PROCESS(example_process, "Example process");
-AUTOSTART_PROCESSES(&example_process);
+PROCESS(watch_listening_process, "Watch packet listening process");
+PROCESS(internode_process, "Internode communication process");
+AUTOSTART_PROCESSES(&watch_listening_process, &internode_process);
 
-PROCESS_THREAD(example_process, ev, data)
+PROCESS_THREAD(watch_listening_process, ev, data)
 {
 
   PROCESS_EXITHANDLER(broadcast_close(&broadcast));
 
   PROCESS_BEGIN();
 
-  broadcast_open(&broadcast, 135, &broadcast_call);
+  broadcast_open(&broadcast, WATCH_BROADCAST_CHANNEL, &watch_callbacks);
+  PROCESS_END();
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+PROCESS_THREAD(internode_process, ev, data)
+{
+  PROCESS_EXITHANDLER(broadcast_close(&broadcast));
+
+  PROCESS_BEGIN();
+
+  broadcast_open(&broadcast, INTER_NODE_CHANNEL, &internode_callbacks);
   PROCESS_END();
 }
