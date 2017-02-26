@@ -66,13 +66,23 @@ broadcast_time_packet(int timestamp, float rssi)
   data_packet_header header;
   header.system_code = SYSTEM_CODE;
   header.source_node_type = 1;
-  header.packet_type = LIGHT_SETTINGS_PACKET;
+  header.packet_type = INTER_NODE_PACKET;
   light_time_packet packet;
   packet.timestamp = timestamp;
   packet.rssi = rssi;
-  // memory stuff might not work here
-  packetbuf_copyfrom(&packet, sizeof(light_time_packet));
-  broadcast_send(&broadcast);
+  int packet_size = sizeof(data_packet_header)
+          + sizeof(light_time_packet);
+  if(mmem_alloc(&mmem, packet_size) == 0) {
+    printf("memory allocation failed\n");
+  } else {
+    char * packet = (char *) MMEM_PTR(&mmem);
+    memcpy(packet,&header,sizeof(data_packet_header));
+    memcpy(packet+sizeof(data_packet_header),&settings,
+        sizeof(light_time_packet));
+    void * void_ptr = (void *) packet;
+    packetbuf_copyfrom(void_ptr,packet_size);
+    broadcast_send(&broadcast);
+  }
 }
 
 
@@ -123,28 +133,6 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
         rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536;
         clock_wait(0.5);
         broadcast_time_packet(watch_timestamp, rssi_from_watch);
-      case INTER_NODE_PACKET:
-        memcpy(&node_packet, packetbuf_dataptr()+sizeof(data_packet_header),
-          sizeof(light_time_packet));
-
-        float rssi = node_packet.rssi;
-        rssis[rssi_count] = rssi;
-        rssi_count++;
-        bool closest = true;
-
-        // check if array of other nodes is full
-        if (rssi_count == 2) {
-          for (int i = 0; i < rssi_count; i++) {
-            if (rssis[i] > rssi_from_watch) {
-              closest = false;
-            }
-          }
-        }
-
-        // if node is closest to watch, turn on light
-        if (closest) {
-          hid_on();
-        }
       default:
         break;
     }
