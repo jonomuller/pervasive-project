@@ -60,9 +60,9 @@ light_time_packet node_packet;
 
 float rssi_from_watch = -INFINITY;
 int watch_timestamp = 0;
-// char *node_ids[NUM_OTHER_LIGHTS];
-// float node_rssis[NUM_OTHER_LIGHTS];
-// int rssi_count = 0;
+float rssis[NUM_OTHER_LIGHTS];
+int rssi_count = 0;
+int old_send_time = -1;
 
 struct rssi_element {
   const linkaddr_t *node_id;
@@ -74,7 +74,8 @@ LIST(rssis);
 static struct broadcast_conn broadcast;
 
 void
-broadcast_time_packet(int timestamp, float rssi)
+broadcast_time_packet(int timestamp, float rssi
+    ,struct broadcast_conn* broadcast)
 {
   static struct mmem mmem;
   mmem_init();
@@ -96,59 +97,86 @@ broadcast_time_packet(int timestamp, float rssi)
         sizeof(light_time_packet));
     void * void_ptr = (void *) packet;
     packetbuf_copyfrom(void_ptr,packet_size);
-    broadcast_send(&broadcast);
+    broadcast_send(broadcast);
   }
 }
 
+void retransmit_settings(void * packet, int size,
+    struct broadcast_conn* broadcast)  {
+    data_packet_header *header = (data_packet_header *) packet;
+
+  if (header->ttl > 0)  {
+    header->ttl -= 1;
+
+    printf("retrasmitting packet %i %i \n",header->ack_no,header->ttl);
+    packetbuf_copyfrom(packet,size);
+
+    broadcast_send(broadcast);
+  }
+
+}
 
 /*---------------------------------------------------------------------------*/
-
+int last_ack = -1;
 static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
   // Lets determine the type of packet received
   data_packet_header data_header;
   memcpy(&data_header,packetbuf_dataptr(),sizeof(data_packet_header));
   if (data_header.system_code == SYSTEM_CODE)  {
-    printf("received light system packet \n");
-    switch (data_header.packet_type)  {
-      case LIGHT_SETTINGS_PACKET:
-        printf("received new light settings \n");
-        char * data_pt = (char*) packetbuf_dataptr();
-        memcpy(&settings,data_pt+sizeof(data_packet_header)
-            ,sizeof(light_settings_packet));
-        if (light_on) hid_off();
-        light_colour = settings.light_colour;
-        light_intensity = settings.light_intensity;
-        if (!light_on) break;
-      case ON_PACKET:
-        hid_on();
-        printf("Received On command \n");
-        if (light_colour == COLOUR_CODE_WHITE)  {
-          hid_set_colour_white();
-        }
-        if (light_colour == COLOUR_CODE_RED)  {
-          hid_set_colour_red();
-        }
-        if (light_colour == COLOUR_CODE_BLUE)  {
-          hid_set_colour_blue();
-        }
-        if (light_colour == COLOUR_CODE_GREEN)  {
-          hid_set_colour_green();
-        }
-        hid_set_intensity(light_intensity);
-        light_on = true;
-        break;
-      case OFF_PACKET:
-        hid_off();
-        light_on = false;
-        printf("Received Off command\n");
-        break;
-      case WATCH_ANNOUNCE_PACKET:
-        watch_timestamp = packetbuf_attr(PACKETBUF_ATTR_TIMESTAMP);
-        rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536;
-        broadcast_time_packet(watch_timestamp, rssi_from_watch);
-      default:
-        break;
+    if (data_header.ack_no< last_ack && data_header.ack_no - last_ack > 1000)  {
+      last_ack = data_header.ack_no;
+    }
+    if (data_header.ack_no >= last_ack) {
+      last_ack = data_header.ack_no;
+      printf("received light system packet \n");
+      switch (data_header.packet_type)  {
+        case LIGHT_SETTINGS_PACKET:
+          printf("received new light settings \n");
+          char * data_pt = (char*) packetbuf_dataptr();
+          memcpy(&settings,data_pt+sizeof(data_packet_header)
+              ,sizeof(light_settings_packet));
+          if (light_on) hid_off();
+          printf("received header %i %i\n",data_header.ack_no,data_header.ttl);
+          light_colour = settings.light_colour;
+          light_intensity = settings.light_intensity;
+          retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header)
+              + sizeof(light_settings_packet),c);
+          if (!light_on) break;
+        case ON_PACKET:
+          hid_on();
+          printf("Received On command \n");
+          if (light_colour == COLOUR_CODE_WHITE)  {
+            hid_set_colour_white();
+          }
+          if (light_colour == COLOUR_CODE_RED)  {
+            hid_set_colour_red();
+          }
+          if (light_colour == COLOUR_CODE_BLUE)  {
+            hid_set_colour_blue();
+          }
+          if (light_colour == COLOUR_CODE_GREEN)  {
+            hid_set_colour_green();
+          }
+          hid_set_intensity(light_intensity);
+          light_on = true;
+          retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header)
+              + sizeof(light_settings_packet),c);
+          break;
+        case OFF_PACKET:
+          hid_off();
+          light_on = false;
+          printf("Received Off command\n");
+          retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header),c);
+          break;
+        case WATCH_ANNOUNCE_PACKET:
+          watch_timestamp = packetbuf_attr(PACKETBUF_ATTR_TIMESTAMP);
+          rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536;
+          clock_wait(0.5);
+          broadcast_time_packet(watch_timestamp, rssi_from_watch,c);
+        default:
+          break;
+      }
     }
   }
 }
@@ -160,7 +188,7 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
   data_packet_header data_header;
   memcpy(&data_header,packetbuf_dataptr(),sizeof(data_packet_header));
   if (data_header.system_code == SYSTEM_CODE)  {
-    printf("received light system packet \n");
+    printf("received internode \n");
     switch (data_header.packet_type)  {
       case INTER_NODE_PACKET:
         memcpy(&node_packet, packetbuf_dataptr()+sizeof(data_packet_header),
@@ -214,7 +242,6 @@ PROCESS_THREAD(watch_listening_process, ev, data)
   PROCESS_EXITHANDLER(broadcast_close(&broadcast_watch));
 
   PROCESS_BEGIN();
-
   broadcast_open(&broadcast_watch, WATCH_BROADCAST_CHANNEL, &watch_callbacks);
   PROCESS_END();
 }

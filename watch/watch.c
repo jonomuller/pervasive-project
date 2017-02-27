@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include "../protocol.h"
 #include "lib/mmem.h"
+#include "clock.h"
 /*---------------------------------------------------------------------------*/
 #define CC26XX_DEMO_LOOP_INTERVAL       (CLOCK_SECOND * 20)
 #define CC26XX_DEMO_LEDS_PERIODIC       LEDS_YELLOW
@@ -27,7 +28,7 @@
 #define CC26XX_DEMO_SENSOR_2     &button_right_sensor
 
 #define WATCH_ANNOUNCE_PERIOD CLOCK_SECOND
-
+#define WATCH_TTL 4
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -50,6 +51,7 @@ PROCESS_THREAD(watch_button_process, ev, data)
   PROCESS_BEGIN();
   broadcast_open(&broadcast, WATCH_BROADCAST_CHANNEL, &broadcast_call);
   mmem_init();
+  clock_init();
   while(1) {
     PROCESS_WAIT_EVENT_UNTIL(ev == sensors_event);
     if (data == CC26XX_DEMO_SENSOR_1)  {
@@ -60,6 +62,8 @@ PROCESS_THREAD(watch_button_process, ev, data)
       header.system_code = SYSTEM_CODE;
       header.source_node_type = 0;
       header.packet_type = switch_pos? ON_PACKET: OFF_PACKET;
+      header.ttl = WATCH_TTL;
+      header.ack_no = clock_time();
       packetbuf_copyfrom(&header,sizeof(data_packet_header));
       broadcast_send(&broadcast);
     } else if (data == CC26XX_DEMO_SENSOR_2)  {
@@ -73,6 +77,9 @@ PROCESS_THREAD(watch_button_process, ev, data)
       header.system_code = SYSTEM_CODE;
       header.source_node_type = 0;
       header.packet_type = LIGHT_SETTINGS_PACKET;
+      header.ttl = WATCH_TTL;
+      header.ack_no = (int) clock_time();
+      printf("time %i ack %i \n",header.ttl,header.ack_no);
       light_settings_packet settings;
       settings.light_colour = current_colour;
       settings.light_intensity = current_intensity;
@@ -108,6 +115,8 @@ PROCESS_THREAD(watch_announce_process, ev, data)
     header.system_code = SYSTEM_CODE;
     header.source_node_type = NODE_TYPE_WATCH;
     header.packet_type = WATCH_ANNOUNCE_PACKET;
+    header.ttl = WATCH_TTL;
+    header.ack_no = clock_time();
     packetbuf_copyfrom(&header,sizeof(data_packet_header));
     broadcast_send(&broadcast);
   }
