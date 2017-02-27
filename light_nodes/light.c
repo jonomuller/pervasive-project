@@ -119,6 +119,19 @@ void retransmit_settings(void * packet, int size,
 
 /*---------------------------------------------------------------------------*/
 int last_ack = -1;
+int current_ack = -1;
+float current_rssi = -1000.0;
+struct rssi_element rssis[NODE_CACHE_SIZE];
+int curr_element_len = 0;
+void clear_element_array()  {
+  //for (int i = 0; i < NODE_CACHE_SIZE ; i++)  {
+  //  rssis[i] = NULL;
+  // }
+  curr_element_len = 0;
+}
+
+static struct etimer et;
+bool clock_started = false;
 static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
   // Lets determine the type of packet received
@@ -145,20 +158,6 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
               + sizeof(light_settings_packet),c);
           if (!light_on) break;
         case ON_PACKET:
-          hid_on();
-          printf("Received On command \n");
-          if (light_colour == COLOUR_CODE_WHITE)  {
-            hid_set_colour_white();
-          }
-          if (light_colour == COLOUR_CODE_RED)  {
-            hid_set_colour_red();
-          }
-          if (light_colour == COLOUR_CODE_BLUE)  {
-            hid_set_colour_blue();
-          }
-          if (light_colour == COLOUR_CODE_GREEN)  {
-            hid_set_colour_green();
-          }
           hid_set_intensity(light_intensity);
           light_on = true;
           retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header)
@@ -173,6 +172,11 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
         case WATCH_ANNOUNCE_PACKET:
           //rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536.0;
           rssi_from_watch = packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536.0;
+          current_ack = data_header.ack_no;
+          current_rssi = rssi_from_watch;
+          etimer_set(&et, DECISION_WINDOW);
+          clock_started = true;
+          clear_element_array();
           broadcast_time_packet(data_header.ack_no, rssi_from_watch);
         default:
           break;
@@ -182,16 +186,6 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
 }
 
 PROCESS(internode_process, "Internode communication process");
-struct rssi_element rssis[NODE_CACHE_SIZE];
-int current_ack = -1;
-int curr_element_len = 0;
-void clear_element_array()  {
-  //for (int i = 0; i < NODE_CACHE_SIZE ; i++)  {
-  //  rssis[i] = NULL;
-  // }
-  curr_element_len = 0;
-}
-static struct etimer et;
 /*---------------------------------------------------------------------------*/
 static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
@@ -218,6 +212,9 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
           elem.rssi = data_time.rssi;
           rssis[curr_element_len] = elem;
           curr_element_len++;
+          printf("Received RSSi of %i from %d.%d\n",(int) elem.rssi,
+              elem.node_id.u8[0],elem.node_id.u8[1]);
+          printf("Current cache length %i\n", curr_element_len +1);
         }
 
       default:
@@ -234,7 +231,9 @@ static struct broadcast_conn broadcast_watch;
 
 PROCESS(watch_listening_process, "Watch packet listening process");
 
-AUTOSTART_PROCESSES(&watch_listening_process, &internode_process);
+PROCESS(calculation_process, "Watch Calculation process");
+AUTOSTART_PROCESSES(&watch_listening_process, &internode_process
+    , &calculation_process);
 //AUTOSTART_PROCESSES(&watch_listening_process);
 PROCESS_THREAD(watch_listening_process, ev, data)
 {
@@ -258,4 +257,64 @@ PROCESS_THREAD(internode_process, ev, data)
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
   PROCESS_END();
 }
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+void turn_on_led()  {
+					hid_on();
+          printf("Received On command \n");
+          if (light_colour == COLOUR_CODE_WHITE)  {
+            hid_set_colour_white();
+          }
+          if (light_colour == COLOUR_CODE_RED)  {
+            hid_set_colour_red();
+          }
+          if (light_colour == COLOUR_CODE_BLUE)  {
+            hid_set_colour_blue();
+          }
+          if (light_colour == COLOUR_CODE_GREEN)  {
+            hid_set_colour_green();
+          }
+          hid_set_intensity(light_intensity);
+}
+
+void turn_off_led() {
+  hid_off();
+  light_on = false;
+}
+
+PROCESS_THREAD(calculation_process, ev, data)
+{
+  PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
+
+  PROCESS_BEGIN();
+  clock_init();
+  broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
+  while(1)  {
+    printf("got here plz \n");
+    PROCESS_WAIT_UNTIL(clock_started == true);
+    clock_started = false;
+    printf("calculation started \n");
+    bool is_closest = true;
+    for (int i = 0; i < curr_element_len; i++) {
+      if (rssis[i].rssi > current_rssi)  {
+        is_closest = false;
+        break;
+      }
+    }
+    if (is_closest) {
+      printf("Im the closest !! \n");
+      if (light_on) {
+        turn_on_led();
+      }
+    } else {
+      turn_off_led();
+    }
+  }
+  PROCESS_END();
+}
+
+
 
