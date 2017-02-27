@@ -18,6 +18,8 @@
 #include <math.h>
 #include "lib/mmem.h"
 #include "clock.h"
+#include "lib/list.h"
+
 
 /*---------------------------------------------------------------------------*/
 #define CC26XX_DEMO_LOOP_INTERVAL       (CLOCK_SECOND * 20)
@@ -50,20 +52,25 @@
 
 
 #define NUM_OTHER_LIGHTS 2
-
+#define NODE_CACHE_SIZE 20
+#define DECISION_WINDOW CLOCK_SECOND * 2
 bool light_on = false;
 int light_colour = COLOUR_CODE_WHITE;
 int light_intensity = 100;
 light_settings_packet settings;
-light_time_packet node_packet;
 
 float rssi_from_watch = -INFINITY;
 int watch_timestamp = 0;
-float rssis[NUM_OTHER_LIGHTS];
-int rssi_count = 0;
 int old_send_time = -1;
 
+
 static struct broadcast_conn broadcast_internode;
+struct rssi_element {
+  linkaddr_t node_id;
+  float rssi;
+};
+
+
 void
 broadcast_time_packet(int timestamp, float rssi)
 {
@@ -84,13 +91,14 @@ broadcast_time_packet(int timestamp, float rssi)
   if(mmem_alloc(&mmem, packet_size) == 0) {
     printf("memory allocation failed\n");
   } else {
-    char * packet = (char *) MMEM_PTR(&mmem);
-    memcpy(packet,&header,sizeof(data_packet_header));
-    memcpy(packet+sizeof(data_packet_header),&settings,
+    char * packet_ptr = (char *) MMEM_PTR(&mmem);
+    memcpy(packet_ptr,&header,sizeof(data_packet_header));
+    memcpy(packet_ptr+sizeof(data_packet_header),&packet,
         sizeof(light_time_packet));
-    void * void_ptr = (void *) packet;
+    void * void_ptr = (void *) packet_ptr;
     packetbuf_copyfrom(void_ptr,packet_size);
     broadcast_send(&broadcast_internode);
+    mmem_free(&mmem);
   }
 }
 
@@ -173,36 +181,43 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
   }
 }
 
+PROCESS(internode_process, "Internode communication process");
+struct rssi_element rssis[NODE_CACHE_SIZE];
+int current_ack = -1;
+int curr_element_len = 0;
+void clear_element_array()  {
+  //for (int i = 0; i < NODE_CACHE_SIZE ; i++)  {
+  //  rssis[i] = NULL;
+  // }
+  curr_element_len = 0;
+}
+static struct etimer et;
 /*---------------------------------------------------------------------------*/
 static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
   // Lets determine the type of packet received
   data_packet_header data_header;
+  light_time_packet data_time;
   memcpy(&data_header,packetbuf_dataptr(),sizeof(data_packet_header));
+  char * char_ptr;
   if (data_header.system_code == SYSTEM_CODE)  {
     printf("received internode \n");
     switch (data_header.packet_type)  {
       case INTER_NODE_PACKET:
-        memcpy(&node_packet, packetbuf_dataptr()+sizeof(data_packet_header),
+        char_ptr = (char *) packetbuf_dataptr();
+        memcpy(&data_time, char_ptr+sizeof(data_packet_header),
           sizeof(light_time_packet));
-
-        float rssi = node_packet.rssi;
-        rssis[rssi_count] = rssi;
-        rssi_count++;
-        bool closest = true;
-
-        // check if array of other nodes is full
-        if (rssi_count == NUM_OTHER_LIGHTS) {
-          for (int i = 0; i < rssi_count; i++) {
-            if (rssis[i] > rssi_from_watch) {
-              closest = false;
-            }
-          }
-
-          // if node is closest to watch, turn on light
-          if (closest) {
-            hid_on();
-          }
+        struct rssi_element elem;
+        if (data_time.timestamp > current_ack)  {
+          current_ack = data_time.timestamp;
+          etimer_set(&et, DECISION_WINDOW);
+          clear_element_array();
+        }
+        if (data_time.timestamp == current_ack)  {
+          memcpy(&elem.node_id, from, sizeof(linkaddr_t));
+          elem.rssi = data_time.rssi;
+          rssis[curr_element_len] = elem;
+          curr_element_len++;
         }
 
       default:
@@ -218,7 +233,7 @@ static const struct broadcast_callbacks internode_callbacks = {internode_recv};
 static struct broadcast_conn broadcast_watch;
 
 PROCESS(watch_listening_process, "Watch packet listening process");
-PROCESS(internode_process, "Internode communication process");
+
 AUTOSTART_PROCESSES(&watch_listening_process, &internode_process);
 //AUTOSTART_PROCESSES(&watch_listening_process);
 PROCESS_THREAD(watch_listening_process, ev, data)
