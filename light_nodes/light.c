@@ -49,7 +49,7 @@
 // Default light settings
 
 
-#DEFINE NUM_OTHER_LIGHTS 2
+#define NUM_OTHER_LIGHTS 2
 
 bool light_on = false;
 int light_colour = COLOUR_CODE_WHITE;
