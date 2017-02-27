@@ -60,8 +60,6 @@ light_time_packet node_packet;
 
 float rssi_from_watch = -INFINITY;
 int watch_timestamp = 0;
-float rssis[NUM_OTHER_LIGHTS];
-int rssi_count = 0;
 int old_send_time = -1;
 
 struct rssi_element {
