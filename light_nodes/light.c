@@ -170,7 +170,6 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
         case WATCH_ANNOUNCE_PACKET:
           watch_timestamp = packetbuf_attr(PACKETBUF_ATTR_TIMESTAMP);
           rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536;
-          clock_wait(0.5);
           broadcast_time_packet(watch_timestamp, rssi_from_watch,c);
         default:
           break;
