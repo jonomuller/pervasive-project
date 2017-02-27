@@ -183,32 +183,34 @@ static const struct broadcast_callbacks watch_callbacks = {watch_recv};
 static const struct broadcast_callbacks internode_callbacks = {internode_recv};
 /*---------------------------------------------------------------------------*/
 
-static struct broadcast_conn broadcast;
+static struct broadcast_conn broadcast_watch;
 
 PROCESS(watch_listening_process, "Watch packet listening process");
 PROCESS(internode_process, "Internode communication process");
 AUTOSTART_PROCESSES(&watch_listening_process, &internode_process);
-
+//AUTOSTART_PROCESSES(&watch_listening_process);
 PROCESS_THREAD(watch_listening_process, ev, data)
 {
 
-  PROCESS_EXITHANDLER(broadcast_close(&broadcast));
+  PROCESS_EXITHANDLER(broadcast_close(&broadcast_watch));
 
   PROCESS_BEGIN();
 
-  broadcast_open(&broadcast, WATCH_BROADCAST_CHANNEL, &watch_callbacks);
+  broadcast_open(&broadcast_watch, WATCH_BROADCAST_CHANNEL, &watch_callbacks);
   PROCESS_END();
 }
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
+static struct broadcast_conn broadcast_internode;
 PROCESS_THREAD(internode_process, ev, data)
 {
-  PROCESS_EXITHANDLER(broadcast_close(&broadcast));
+  PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
 
   PROCESS_BEGIN();
 
-  broadcast_open(&broadcast, INTER_NODE_CHANNEL, &internode_callbacks);
+  broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
   PROCESS_END();
 }
+
