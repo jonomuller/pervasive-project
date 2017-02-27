@@ -16,6 +16,7 @@
 #include "hid_leds.h"
 #include "../protocol.h"
 #include <math.h>
+#include "lib/mmem.h"
 
 
 /*---------------------------------------------------------------------------*/
@@ -63,6 +64,8 @@ static struct broadcast_conn broadcast;
 void
 broadcast_time_packet(int timestamp, float rssi)
 {
+  static struct mmem mmem;
+  mmem_init();
   data_packet_header header;
   header.system_code = SYSTEM_CODE;
   header.source_node_type = 1;
