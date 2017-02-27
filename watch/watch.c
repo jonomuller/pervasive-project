@@ -27,8 +27,8 @@
 #define CC26XX_DEMO_SENSOR_1     &button_left_sensor
 #define CC26XX_DEMO_SENSOR_2     &button_right_sensor
 
-#define WATCH_ANNOUNCE_PERIOD CLOCK_SECOND
-#define WATCH_TTL 4
+#define WATCH_ANNOUNCE_PERIOD CLOCK_SECOND * 10
+#define WATCH_TTL 2
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -119,6 +119,7 @@ PROCESS_THREAD(watch_announce_process, ev, data)
     header.ack_no = clock_time();
     packetbuf_copyfrom(&header,sizeof(data_packet_header));
     broadcast_send(&broadcast);
+    etimer_set(&et, WATCH_ANNOUNCE_PERIOD);
   }
   PROCESS_END();
 }

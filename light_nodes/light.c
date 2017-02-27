@@ -17,7 +17,7 @@
 #include "../protocol.h"
 #include <math.h>
 #include "lib/mmem.h"
-
+#include "clock.h"
 
 /*---------------------------------------------------------------------------*/
 #define CC26XX_DEMO_LOOP_INTERVAL       (CLOCK_SECOND * 20)
@@ -63,9 +63,9 @@ float rssis[NUM_OTHER_LIGHTS];
 int rssi_count = 0;
 int old_send_time = -1;
 
+static struct broadcast_conn broadcast_internode;
 void
-broadcast_time_packet(int timestamp, float rssi
-    ,struct broadcast_conn* broadcast)
+broadcast_time_packet(int timestamp, float rssi)
 {
   static struct mmem mmem;
   mmem_init();
@@ -76,6 +76,9 @@ broadcast_time_packet(int timestamp, float rssi
   light_time_packet packet;
   packet.timestamp = timestamp;
   packet.rssi = rssi;
+  header.ttl = 1;
+  printf("SENT watch RSSI %d \n",(int)packet.rssi);
+  header.ack_no = clock_time();
   int packet_size = sizeof(data_packet_header)
           + sizeof(light_time_packet);
   if(mmem_alloc(&mmem, packet_size) == 0) {
@@ -87,7 +90,7 @@ broadcast_time_packet(int timestamp, float rssi
         sizeof(light_time_packet));
     void * void_ptr = (void *) packet;
     packetbuf_copyfrom(void_ptr,packet_size);
-    broadcast_send(broadcast);
+    broadcast_send(&broadcast_internode);
   }
 }
 
@@ -160,10 +163,9 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
           retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header),c);
           break;
         case WATCH_ANNOUNCE_PACKET:
-          watch_timestamp = packetbuf_attr(PACKETBUF_ATTR_TIMESTAMP);
-          rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536;
-          clock_wait(0.5);
-          broadcast_time_packet(watch_timestamp, rssi_from_watch,c);
+          //rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536.0;
+          rssi_from_watch = packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536.0;
+          broadcast_time_packet(data_header.ack_no, rssi_from_watch);
         default:
           break;
       }
@@ -232,13 +234,12 @@ PROCESS_THREAD(watch_listening_process, ev, data)
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
-static struct broadcast_conn broadcast_internode;
 PROCESS_THREAD(internode_process, ev, data)
 {
   PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
 
   PROCESS_BEGIN();
-
+  clock_init();
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
   PROCESS_END();
 }
