@@ -178,6 +178,8 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
   }
 }
 
+PROCESS(internode_process, "Internode communication process");
+
 /*---------------------------------------------------------------------------*/
 static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
 {
@@ -200,6 +202,11 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
 
         bool closest = true;
         struct rssi_element *c;
+
+        struct etimer et;
+        etimer_set(&et, CLOCK_SECOND * 0.5);
+        // not quite sure how this function works
+        // process_post(&internode_process, PROCESS_EVENT_TIMER, etimer_expired(&et));
 
         // check if array of other nodes is full
         if (list_length(rssis) == NUM_OTHER_LIGHTS) {
@@ -230,7 +237,7 @@ static const struct broadcast_callbacks internode_callbacks = {internode_recv};
 static struct broadcast_conn broadcast_watch;
 
 PROCESS(watch_listening_process, "Watch packet listening process");
-PROCESS(internode_process, "Internode communication process");
+
 AUTOSTART_PROCESSES(&watch_listening_process, &internode_process);
 //AUTOSTART_PROCESSES(&watch_listening_process);
 PROCESS_THREAD(watch_listening_process, ev, data)
