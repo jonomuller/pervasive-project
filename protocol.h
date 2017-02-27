@@ -31,6 +31,8 @@ typedef struct {
   int system_code;
   int source_node_type;
   int packet_type;
+  int ack_no;
+  int ttl;
 } data_packet_header;
 
 typedef struct {
