@@ -17,6 +17,7 @@
 #include "../protocol.h"
 #include <math.h>
 #include "lib/mmem.h"
+#include "lib/list.h"
 
 
 /*---------------------------------------------------------------------------*/
@@ -59,8 +60,16 @@ light_time_packet node_packet;
 
 float rssi_from_watch = -INFINITY;
 int watch_timestamp = 0;
-float rssis[NUM_OTHER_LIGHTS];
-int rssi_count = 0;
+// char *node_ids[NUM_OTHER_LIGHTS];
+// float node_rssis[NUM_OTHER_LIGHTS];
+// int rssi_count = 0;
+
+struct rssi_element {
+  const linkaddr_t *node_id;
+  float rssi;
+};
+
+LIST(rssis);
 
 static struct broadcast_conn broadcast;
 
@@ -137,7 +146,6 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
       case WATCH_ANNOUNCE_PACKET:
         watch_timestamp = packetbuf_attr(PACKETBUF_ATTR_TIMESTAMP);
         rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536;
-        clock_wait(0.5);
         broadcast_time_packet(watch_timestamp, rssi_from_watch);
       default:
         break;
@@ -157,17 +165,24 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
       case INTER_NODE_PACKET:
         memcpy(&node_packet, packetbuf_dataptr()+sizeof(data_packet_header),
           sizeof(light_time_packet));
+        
+        struct rssi_element elem;
 
-        float rssi = node_packet.rssi;
-        rssis[rssi_count] = rssi;
-        rssi_count++;
+        list_init(rssis);
+        elem.node_id = from;
+        elem.rssi = node_packet.rssi;
+        list_add(rssis, &elem);
+
         bool closest = true;
+        struct rssi_element *c;
 
         // check if array of other nodes is full
-        if (rssi_count == NUM_OTHER_LIGHTS) {
-          for (int i = 0; i < rssi_count; i++) {
-            if (rssis[i] > rssi_from_watch) {
+        if (list_length(rssis) == NUM_OTHER_LIGHTS) {
+          for (c = list_head(rssis); c != NULL; c = list_item_next(c)) {
+            if (elem.rssi > rssi_from_watch) {
               closest = false;
+              // broadcast to that node and tell them they are closest?
+              // using node_ids[i]
             }
           }
 
