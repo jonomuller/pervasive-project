@@ -48,6 +48,9 @@
 /*---------------------------------------------------------------------------*/
 // Default light settings
 
+
+#define NUM_OTHER_LIGHTS 2
+
 bool light_on = false;
 int light_colour = COLOUR_CODE_WHITE;
 int light_intensity = 100;
@@ -56,7 +59,7 @@ light_time_packet node_packet;
 
 float rssi_from_watch = -INFINITY;
 int watch_timestamp = 0;
-float rssis[2];
+float rssis[NUM_OTHER_LIGHTS];
 int rssi_count = 0;
 
 static struct broadcast_conn broadcast;
@@ -161,18 +164,19 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
         bool closest = true;
 
         // check if array of other nodes is full
-        if (rssi_count == 2) {
+        if (rssi_count == NUM_OTHER_LIGHTS) {
           for (int i = 0; i < rssi_count; i++) {
             if (rssis[i] > rssi_from_watch) {
               closest = false;
             }
           }
+
+          // if node is closest to watch, turn on light
+          if (closest) {
+            hid_on();
+          }
         }
 
-        // if node is closest to watch, turn on light
-        if (closest) {
-          hid_on();
-        }
       default:
         break;
     }
