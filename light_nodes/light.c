@@ -104,6 +104,7 @@ broadcast_time_packet(int timestamp, float rssi)
   }
 }
 
+// If ttl is greater than 0, restransmit packet
 void retransmit_settings(void * packet, int size,
     struct broadcast_conn* broadcast)  {
     data_packet_header *header = (data_packet_header *) packet;
@@ -246,6 +247,9 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
               data_time.node_id.u8[0],data_time.node_id.u8[1]);
           printf("Current cache length %i\n", curr_element_len +1);
         }
+
+        retransmit_settings(packetbuf_dataptr(), sizeof(data_packet_header)
+           + sizeof(light_time_packet), c);
 
       default:
         break;
