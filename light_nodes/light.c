@@ -63,6 +63,7 @@ float rssi_from_watch = -INFINITY;
 int watch_timestamp = 0;
 int old_send_time = -1;
 
+PROCESS(calculation_process, "Watch Calculation process");
 
 static struct broadcast_conn broadcast_internode;
 struct rssi_element {
@@ -174,8 +175,7 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
           rssi_from_watch = packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536.0;
           current_ack = data_header.ack_no;
           current_rssi = rssi_from_watch;
-          etimer_set(&et, DECISION_WINDOW);
-          clock_started = true;
+          process_start(&calculation_process,NULL);
           clear_element_array();
           broadcast_time_packet(data_header.ack_no, rssi_from_watch);
         default:
@@ -231,9 +231,7 @@ static struct broadcast_conn broadcast_watch;
 
 PROCESS(watch_listening_process, "Watch packet listening process");
 
-PROCESS(calculation_process, "Watch Calculation process");
-AUTOSTART_PROCESSES(&watch_listening_process, &internode_process
-    , &calculation_process);
+AUTOSTART_PROCESSES(&watch_listening_process, &internode_process);
 //AUTOSTART_PROCESSES(&watch_listening_process);
 PROCESS_THREAD(watch_listening_process, ev, data)
 {
@@ -288,14 +286,11 @@ void turn_off_led() {
 PROCESS_THREAD(calculation_process, ev, data)
 {
   PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
-
   PROCESS_BEGIN();
-  clock_init();
+  etimer_set(&et, DECISION_WINDOW);
+  PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
-  while(1)  {
     printf("got here plz \n");
-    PROCESS_WAIT_UNTIL(clock_started == true);
-    clock_started = false;
     printf("calculation started \n");
     bool is_closest = true;
     for (int i = 0; i < curr_element_len; i++) {
@@ -312,7 +307,6 @@ PROCESS_THREAD(calculation_process, ev, data)
     } else {
       turn_off_led();
     }
-  }
   PROCESS_END();
 }
 
