@@ -1,3 +1,5 @@
+#include "net/rime/rime.h"
+
 #define SYSTEM_CODE 123456
 #define WATCH_BROADCAST_CHANNEL 135
 #define INTER_NODE_CHANNEL 136
@@ -43,6 +45,7 @@ typedef struct {
 typedef struct {
   int timestamp;
   float rssi;
+  linkaddr_t node_id;
 } light_time_packet;
 
 typedef struct {

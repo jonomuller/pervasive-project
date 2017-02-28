@@ -84,7 +84,8 @@ broadcast_time_packet(int timestamp, float rssi)
   light_time_packet packet;
   packet.timestamp = timestamp;
   packet.rssi = rssi;
-  header.ttl = 1;
+  packet.node_id = linkaddr_node_addr;
+  header.ttl = 3;
   printf("SENT watch RSSI %d \n",(int)packet.rssi);
   header.ack_no = clock_time();
   int packet_size = sizeof(data_packet_header)
@@ -122,13 +123,24 @@ void retransmit_settings(void * packet, int size,
 int last_ack = -1;
 int current_ack = -1;
 float current_rssi = -1000.0;
-struct rssi_element rssis[NODE_CACHE_SIZE];
+light_time_packet rssis[NODE_CACHE_SIZE];
 int curr_element_len = 0;
 void clear_element_array()  {
   //for (int i = 0; i < NODE_CACHE_SIZE ; i++)  {
   //  rssis[i] = NULL;
   // }
   curr_element_len = 0;
+}
+
+bool node_in_array(linkaddr_t node)  {
+  bool ret = false;
+  for (int i = 0; i < curr_element_len; i++)  {
+    if (linkaddr_cmp(&rssis[i].node_id,&node) != 0)  {
+      ret = true;
+      break;
+    }
+  }
+  return ret;
 }
 
 static struct etimer et;
@@ -157,15 +169,29 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
           light_intensity = settings.light_intensity;
           retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header)
               + sizeof(light_settings_packet),c);
-          if (!light_on) break;
+          if (light_colour == COLOUR_CODE_WHITE)  {
+            hid_set_colour_white();
+          }
+          if (light_colour == COLOUR_CODE_RED)  {
+            hid_set_colour_red();
+          }
+          if (light_colour == COLOUR_CODE_BLUE)  {
+            hid_set_colour_blue();
+          }
+          if (light_colour == COLOUR_CODE_GREEN)  {
+            hid_set_colour_green();
+          }
+          hid_set_intensity(light_intensity);
+          break;
         case ON_PACKET:
           //hid_set_intensity(light_intensity);
+          printf("received an on command \n");
           light_on = true;
           retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header)
               + sizeof(light_settings_packet),c);
           break;
         case OFF_PACKET:
-          //hid_off();
+          hid_off();
           light_on = false;
           printf("Received Off command\n");
           retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header),c);
@@ -206,19 +232,18 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
         char_ptr = (char *) packetbuf_dataptr();
         memcpy(&data_time, char_ptr+sizeof(data_packet_header),
           sizeof(light_time_packet));
-        struct rssi_element elem;
         if (data_time.timestamp > current_ack)  {
           current_ack = data_time.timestamp;
           etimer_set(&et, DECISION_WINDOW);
           clear_element_array();
         }
-        if (data_time.timestamp == current_ack)  {
-          memcpy(&elem.node_id, from, sizeof(linkaddr_t));
-          elem.rssi = data_time.rssi;
-          rssis[curr_element_len] = elem;
+        if (data_time.timestamp == current_ack &&
+            linkaddr_cmp(&data_time.node_id,&linkaddr_node_addr) == 0 &&
+            !node_in_array(data_time.node_id))  {
+          rssis[curr_element_len] = data_time;
           curr_element_len++;
-          printf("Received RSSi of %i from %d.%d\n",(int) elem.rssi,
-              elem.node_id.u8[0],elem.node_id.u8[1]);
+          printf("Received RSSi of %i from %d.%d\n",(int) data_time.rssi,
+              data_time.node_id.u8[0],data_time.node_id.u8[1]);
           printf("Current cache length %i\n", curr_element_len +1);
         }
 
@@ -266,26 +291,13 @@ PROCESS_THREAD(internode_process, ev, data)
 /*---------------------------------------------------------------------------*/
 
 void turn_on_led()  {
-					//hid_on();
+					hid_on();
           printf("Turning on light!");
           printf("Received On command \n");
-          if (light_colour == COLOUR_CODE_WHITE)  {
-            //hid_set_colour_white();
-          }
-          if (light_colour == COLOUR_CODE_RED)  {
-            //hid_set_colour_red();
-          }
-          if (light_colour == COLOUR_CODE_BLUE)  {
-            //hid_set_colour_blue();
-          }
-          if (light_colour == COLOUR_CODE_GREEN)  {
-            //hid_set_colour_green();
-          }
-          //hid_set_intensity(light_intensity);
 }
 
 void turn_off_led() {
-  //hid_off();
+  hid_off();
   printf("turning off light! \n");
   light_on = false;
 }

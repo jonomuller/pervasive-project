@@ -6,7 +6,7 @@ LPM_MODULE(led_module, NULL, NULL, NULL, LPM_DOMAIN_PERIPH);
 uint32_t led_pin = DEV_LED_IOID_WHITE;
 int intensity = 1000;
 
-
+bool toms_leds_library_on = false;
 /*
  * LED PWM by nchronas
  */
@@ -94,38 +94,64 @@ void hid_set_intensity(int percent)  {
     percent = 100;
   }
   intensity = 12000/100 * (100-percent);
-  led_pwm_update(intensity, led_pin);
+  if (toms_leds_library_on) {
+    led_pwm_update(intensity, led_pin);
+  }
 }
 
 
 void hid_set_colour_white() {
-  led_pwm_stop(led_pin);
+  if (toms_leds_library_on)  {
+   led_pwm_stop(led_pin);
+  }
   led_pin = DEV_LED_IOID_WHITE;
-  led_pwm_start(intensity,led_pin);
+  if(toms_leds_library_on)  {
+    led_pwm_start(intensity,led_pin);
+  }
 }
 
+
 void hid_set_colour_green() {
-  led_pwm_stop(led_pin);
+  if (toms_leds_library_on)  {
+   led_pwm_stop(led_pin);
+  }
   led_pin = DEV_LED_IOID_GREEN;
-  led_pwm_start(intensity,led_pin);
+  if(toms_leds_library_on)  {
+    led_pwm_start(intensity,led_pin);
+  }
 }
 
 void hid_set_colour_blue() {
-  led_pwm_stop(led_pin);
+  if (toms_leds_library_on)  {
+   led_pwm_stop(led_pin);
+  }
+
   led_pin = DEV_LED_IOID_BLUE;
-  led_pwm_start(intensity,led_pin);
+  if(toms_leds_library_on)  {
+    led_pwm_start(intensity,led_pin);
+  }
 }
 
+
 void hid_set_colour_red() {
-  led_pwm_stop(led_pin);
+  if (toms_leds_library_on)  {
+   led_pwm_stop(led_pin);
+  }
   led_pin = DEV_LED_IOID_RED;
-  led_pwm_start(intensity,led_pin);
+  if(toms_leds_library_on)  {
+    led_pwm_start(intensity,led_pin);
+  }
 }
 
 void hid_on()  {
-  led_pwm_start(intensity, led_pin);
+  if (!toms_leds_library_on) {
+    led_pwm_start(intensity, led_pin);
+    toms_leds_library_on = true;
+  }
 }
 
 void hid_off()  {
-  led_pwm_stop(led_pin);
+  if(toms_leds_library_on) {
+   led_pwm_stop(led_pin);
+  }
 }
