@@ -151,7 +151,7 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
           char * data_pt = (char*) packetbuf_dataptr();
           memcpy(&settings,data_pt+sizeof(data_packet_header)
               ,sizeof(light_settings_packet));
-          if (light_on) hid_off();
+          //if (light_on) hid_off();
           printf("received header %i %i\n",data_header.ack_no,data_header.ttl);
           light_colour = settings.light_colour;
           light_intensity = settings.light_intensity;
@@ -159,13 +159,13 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
               + sizeof(light_settings_packet),c);
           if (!light_on) break;
         case ON_PACKET:
-          hid_set_intensity(light_intensity);
+          //hid_set_intensity(light_intensity);
           light_on = true;
           retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header)
               + sizeof(light_settings_packet),c);
           break;
         case OFF_PACKET:
-          hid_off();
+          //hid_off();
           light_on = false;
           printf("Received Off command\n");
           retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header),c);
@@ -261,7 +261,8 @@ PROCESS_THREAD(internode_process, ev, data)
 /*---------------------------------------------------------------------------*/
 
 void turn_on_led()  {
-					hid_on();
+					//hid_on();
+          printf("Turning on light!");
           printf("Received On command \n");
           if (light_colour == COLOUR_CODE_WHITE)  {
             hid_set_colour_white();
@@ -279,7 +280,8 @@ void turn_on_led()  {
 }
 
 void turn_off_led() {
-  hid_off();
+  //hid_off();
+  printf("turning off light! \n");
   light_on = false;
 }
 
