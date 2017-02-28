@@ -173,11 +173,16 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
         case WATCH_ANNOUNCE_PACKET:
           //rssi_from_watch = (float) packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536.0;
           rssi_from_watch = packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536.0;
-          current_ack = data_header.ack_no;
-          current_rssi = rssi_from_watch;
-          process_start(&calculation_process,NULL);
-          clear_element_array();
-          broadcast_time_packet(data_header.ack_no, rssi_from_watch);
+          if (data_header.ack_no > current_ack)  {
+            current_ack = data_header.ack_no;
+            current_rssi = rssi_from_watch;
+            process_exit(&calculation_process);
+            process_start(&calculation_process,NULL);
+            clear_element_array();
+            broadcast_time_packet(data_header.ack_no, rssi_from_watch);
+          } else {
+            printf("ignored repeated watch announce packet \n");
+          }
         default:
           break;
       }
@@ -265,18 +270,18 @@ void turn_on_led()  {
           printf("Turning on light!");
           printf("Received On command \n");
           if (light_colour == COLOUR_CODE_WHITE)  {
-            hid_set_colour_white();
+            //hid_set_colour_white();
           }
           if (light_colour == COLOUR_CODE_RED)  {
-            hid_set_colour_red();
+            //hid_set_colour_red();
           }
           if (light_colour == COLOUR_CODE_BLUE)  {
-            hid_set_colour_blue();
+            //hid_set_colour_blue();
           }
           if (light_colour == COLOUR_CODE_GREEN)  {
-            hid_set_colour_green();
+            //hid_set_colour_green();
           }
-          hid_set_intensity(light_intensity);
+          //hid_set_intensity(light_intensity);
 }
 
 void turn_off_led() {
@@ -289,11 +294,11 @@ PROCESS_THREAD(calculation_process, ev, data)
 {
   PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
   PROCESS_BEGIN();
+  printf("clock start \n");
   etimer_set(&et, DECISION_WINDOW);
   PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
-    printf("got here plz \n");
-    printf("calculation started \n");
+    printf("calculation started - num of comparisons %i \n",curr_element_len);
     bool is_closest = true;
     for (int i = 0; i < curr_element_len; i++) {
       if (rssis[i].rssi > current_rssi)  {

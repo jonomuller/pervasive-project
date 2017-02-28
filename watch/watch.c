@@ -119,6 +119,17 @@ PROCESS_THREAD(watch_announce_process, ev, data)
     header.ack_no = clock_time();
     packetbuf_copyfrom(&header,sizeof(data_packet_header));
     broadcast_send(&broadcast);
+
+    packetbuf_copyfrom(&header,sizeof(data_packet_header));
+    broadcast_send(&broadcast);
+
+    packetbuf_copyfrom(&header,sizeof(data_packet_header));
+    broadcast_send(&broadcast);
+
+
+    packetbuf_copyfrom(&header,sizeof(data_packet_header));
+    broadcast_send(&broadcast);
+
     etimer_set(&et, WATCH_ANNOUNCE_PERIOD);
   }
   PROCESS_END();
