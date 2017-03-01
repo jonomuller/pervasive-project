@@ -46,11 +46,10 @@ typedef struct {
   int timestamp;
   float rssi;
   linkaddr_t node_id;
+  bool closest;
 } light_time_packet;
 
 typedef struct {
   int timestamp;
 } announce_packet;
-
-
 

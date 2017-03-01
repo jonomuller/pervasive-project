@@ -73,7 +73,7 @@ struct rssi_element {
 
 
 void
-broadcast_time_packet(int timestamp, float rssi)
+broadcast_time_packet(int timestamp, float rssi, bool closest)
 {
   static struct mmem mmem;
   mmem_init();
@@ -85,6 +85,7 @@ broadcast_time_packet(int timestamp, float rssi)
   packet.timestamp = timestamp;
   packet.rssi = rssi;
   packet.node_id = linkaddr_node_addr;
+  packet.closest = closest;
   header.ttl = 3;
   printf("SENT watch RSSI %d \n",(int)packet.rssi);
   header.ack_no = clock_time();
@@ -207,7 +208,7 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
             process_exit(&calculation_process);
             process_start(&calculation_process,NULL);
             clear_element_array();
-            broadcast_time_packet(data_header.ack_no, rssi_from_watch);
+            broadcast_time_packet(data_header.ack_no, rssi_from_watch, false);
           } else {
             printf("ignored repeated watch announce packet \n");
           }
@@ -234,6 +235,12 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
         char_ptr = (char *) packetbuf_dataptr();
         memcpy(&data_time, char_ptr+sizeof(data_packet_header),
           sizeof(light_time_packet));
+
+        if (data_time.closest) {
+          hid_set_colour_white();
+          break;
+        }
+
         if (data_time.timestamp > current_ack)  {
           current_ack = data_time.timestamp;
           etimer_set(&et, DECISION_WINDOW);
@@ -325,6 +332,7 @@ PROCESS_THREAD(calculation_process, ev, data)
     }
     if (is_closest) {
       printf("Im the closest !! \n");
+      broadcast_time_packet(0, 0, true);
       if (light_on) {
         // turn_on_led();
         // change colour to green
