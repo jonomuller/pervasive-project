@@ -186,6 +186,7 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
           break;
         case ON_PACKET:
           //hid_set_intensity(light_intensity);
+          hid_on();
           printf("received an on command \n");
           light_on = true;
           retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header)
@@ -325,10 +326,14 @@ PROCESS_THREAD(calculation_process, ev, data)
     if (is_closest) {
       printf("Im the closest !! \n");
       if (light_on) {
-        turn_on_led();
+        // turn_on_led();
+        // change colour to green
+        hid_set_colour_green();
       }
     } else {
-      turn_off_led();
+      // turn_off_led();
+      // change colour back to white
+      hid_set_colour_white();
     }
   PROCESS_END();
 }
