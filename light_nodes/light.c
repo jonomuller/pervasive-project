@@ -79,6 +79,7 @@ typedef struct {
 } rssi_element;
 
 static struct etimer randt;
+static struct etimer et3;
 clock_time_t t_rand;
 
 // If ttl is greater than 0, restransmit packet
@@ -237,7 +238,7 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
         char_ptr = (char *) packetbuf_dataptr();
         memcpy(&announce, char_ptr + sizeof(data_packet_header),
           sizeof(announce));
-        
+
         if (data_header.ack_no > current_ack)  {
           current_ack = data_header.ack_no;
           etimer_set(&et, NEGOTIATION_WINDOW);
@@ -420,28 +421,32 @@ PROCESS_THREAD(negotiation_process, ev, data)
 {
   PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
   PROCESS_BEGIN();
-  etimer_set(&et, DECISION_WINDOW);
-  PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
+  etimer_set(&et3, NEGOTIATION_WINDOW);
+  PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et3));
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
-    printf("calculation started - num of comparisons %i \n",curr_element_len);
-    bool is_closest = true;
-    for (int i = 0; i < curr_announce_elem_len; i++) {
-      if (announcers[i].num_comparisons > curr_announce_elem_len)  {
-        is_closest = false;
-        break;
-      }
+  printf("decisions started - num of comparisons %i \n",curr_announce_elem_len);
+  linkaddr_t negotiated_closest_node = closest_node;
+  int negotiated_comp = curr_element_len;
+  for (int i = 0; i < curr_announce_elem_len; i++) {
+    if (announcers[i].num_comparisons > negotiated_comp)  {
+      negotiated_closest_node = announcers[i].closest_node;
+      negotiated_comp = announcers[i].num_comparisons;
+      break;
     }
-    if (is_closest) {
-      printf("Im the closest !! \n");
-      if (light_on) {
-        // turn_on_led();
-        // change colour to green
-        hid_set_colour_green();
-      }
-    } else {
-      // turn_off_led();
-      // change colour back to white
-      hid_set_colour_white();
+  }
+  bool is_closest = linkaddr_cmp(&linkaddr_node_addr,&negotiated_closest_node)
+    != 0;
+  if (is_closest) {
+    printf("Im the closest !! \n");
+    if (light_on) {
+      // turn_on_led();
+      // change colour to green
+      hid_set_colour_green();
     }
+  } else {
+    // turn_off_led();
+    // change colour back to white
+    hid_set_colour_white();
+  }
   PROCESS_END();
 }
