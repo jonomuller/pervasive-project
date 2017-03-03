@@ -54,6 +54,7 @@
 #define NUM_OTHER_LIGHTS 2
 #define NODE_CACHE_SIZE 20
 #define DECISION_WINDOW CLOCK_SECOND * 2
+#define NEGOTIATION_WINDOW CLOCK_SECOND
 #define NUM_OF_CALC_REBROADCASTS 3
 #define NUM_OF_ANNOUNCE_REBROADCASTS 1
 #define INTERNODE_TTL 1
@@ -99,7 +100,9 @@ int last_ack = -1;
 int current_ack = -1;
 float current_rssi = -1000.0;
 light_time_packet rssis[NODE_CACHE_SIZE];
+announce_packet announcers[NODE_CACHE_SIZE];
 int curr_element_len = 0;
+int curr_announce_elem_len = 0;
 void clear_element_array()  {
   //for (int i = 0; i < NODE_CACHE_SIZE ; i++)  {
   //  rssis[i] = NULL;
@@ -201,6 +204,7 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
   // Lets determine the type of packet received
   data_packet_header data_header;
   light_time_packet data_time;
+  announce_packet announce;
   memcpy(&data_header,packetbuf_dataptr(),sizeof(data_packet_header));
   char * char_ptr;
   if (data_header.system_code == SYSTEM_CODE)  {
@@ -227,7 +231,26 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
 
         retransmit_settings(packetbuf_dataptr(), sizeof(data_packet_header)
            + sizeof(light_time_packet), c);
+      case ANNOUNCE_CLOSEST_PACKET:
+        char_ptr = (char *) packetbuf_dataptr();
+        memcpy(&announce, char_ptr + sizeof(data_packet_header),
+          sizeof(announce));
+        
+        if (data_header.ack_no > current_ack)  {
+          current_ack = data_header.ack_no;
+          etimer_set(&et, NEGOTIATION_WINDOW);
+          clear_element_array();
+        }
 
+        if (data_header.ack_no == current_ack &&
+            linkaddr_cmp(&announce.closest_node,&linkaddr_node_addr) == 0 &&
+            !node_in_array(announce.closest_node))  {
+          announcers[curr_announce_elem_len] = announce;
+          curr_announce_elem_len++;
+          printf("Received num_comparisons of %i from %d.%d\n",(int) announce.num_comparisons,
+              announce.closest_node.u8[0],announce.closest_node.u8[1]);
+          printf("Current announce cache length %i\n", curr_announce_elem_len +1);
+        }
       default:
         break;
     }
@@ -362,7 +385,7 @@ PROCESS_THREAD(calculation_process, ev, data)
   data_packet_header header;
   header.system_code = SYSTEM_CODE;
   header.source_node_type = 1;
-  header.packet_type = ANNOUNCE_CLOSEST_PACKET;nnounce_packet announce;
+  header.packet_type = ANNOUNCE_CLOSEST_PACKET;
   announce_packet announce;
   announce.closest_node = closest_node;
   announce.num_comparisons = curr_element_len;
@@ -393,13 +416,13 @@ PROCESS_THREAD(negotiation_process, ev, data)
   PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
   PROCESS_BEGIN();
   printf("clock start \n");
-  etimer_set(&et, DECISION_WINDOW);
+  etimer_set(&et, NEGOTIATION_WINDOW);
   PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
     printf("calculation started - num of comparisons %i \n",curr_element_len);
     bool is_closest = true;
-    for (int i = 0; i < curr_element_len; i++) {
-      if (rssis[i].rssi > current_rssi)  {
+    for (int i = 0; i < curr_announce_elem_len; i++) {
+      if (announcers[i].num_comparisons > curr_announce_elem_len)  {
         is_closest = false;
         break;
       }
