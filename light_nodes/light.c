@@ -19,7 +19,7 @@
 #include "lib/mmem.h"
 #include "clock.h"
 #include "lib/list.h"
-
+#include "lib/random.h"
 
 /*---------------------------------------------------------------------------*/
 #define CC26XX_DEMO_LOOP_INTERVAL       (CLOCK_SECOND * 20)
@@ -54,6 +54,7 @@
 #define NUM_OTHER_LIGHTS 2
 #define NODE_CACHE_SIZE 20
 #define DECISION_WINDOW CLOCK_SECOND * 2
+#define NUM_OF_CALC_REBROADCASTS 3
 bool light_on = false;
 int light_colour = COLOUR_CODE_WHITE;
 int light_intensity = 100;
@@ -64,45 +65,16 @@ int watch_timestamp = 0;
 int old_send_time = -1;
 
 PROCESS(calculation_process, "Watch Calculation process");
+PROCESS(calculation_broadcast , "Calculation Broadcast");
 
 static struct broadcast_conn broadcast_internode;
-struct rssi_element {
-  linkaddr_t node_id;
+typedef struct {
+  int ack_no;
   float rssi;
-};
+} rssi_element;
 
-
-void
-broadcast_time_packet(int timestamp, float rssi)
-{
-  static struct mmem mmem;
-  mmem_init();
-  data_packet_header header;
-  header.system_code = SYSTEM_CODE;
-  header.source_node_type = 1;
-  header.packet_type = INTER_NODE_PACKET;
-  light_time_packet packet;
-  packet.timestamp = timestamp;
-  packet.rssi = rssi;
-  packet.node_id = linkaddr_node_addr;
-  header.ttl = 3;
-  printf("SENT watch RSSI %d \n",(int)packet.rssi);
-  header.ack_no = clock_time();
-  int packet_size = sizeof(data_packet_header)
-          + sizeof(light_time_packet);
-  if(mmem_alloc(&mmem, packet_size) == 0) {
-    printf("memory allocation failed\n");
-  } else {
-    char * packet_ptr = (char *) MMEM_PTR(&mmem);
-    memcpy(packet_ptr,&header,sizeof(data_packet_header));
-    memcpy(packet_ptr+sizeof(data_packet_header),&packet,
-        sizeof(light_time_packet));
-    void * void_ptr = (void *) packet_ptr;
-    packetbuf_copyfrom(void_ptr,packet_size);
-    broadcast_send(&broadcast_internode);
-    mmem_free(&mmem);
-  }
-}
+static struct etimer randt;
+clock_time_t t_rand;
 
 // If ttl is greater than 0, restransmit packet
 void retransmit_settings(void * packet, int size,
@@ -207,7 +179,8 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
             process_exit(&calculation_process);
             process_start(&calculation_process,NULL);
             clear_element_array();
-            broadcast_time_packet(data_header.ack_no, rssi_from_watch);
+            process_post_synch(&calculation_broadcast,PROCESS_EVENT_CONTINUE
+                ,NULL );
           } else {
             printf("ignored repeated watch announce packet \n");
           }
@@ -288,9 +261,55 @@ PROCESS_THREAD(internode_process, ev, data)
   PROCESS_BEGIN();
   clock_init();
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
+  process_start(&calculation_broadcast,NULL);
   PROCESS_END();
 }
 
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+PROCESS_THREAD(calculation_broadcast , ev, data)
+{
+  PROCESS_BEGIN();
+  while(1) {
+    PROCESS_WAIT_EVENT();
+    static struct mmem mmem;
+    mmem_init();
+    data_packet_header header;
+    header.system_code = SYSTEM_CODE;
+    header.source_node_type = 1;
+    header.packet_type = INTER_NODE_PACKET;
+    light_time_packet packet;
+    packet.timestamp = current_ack;
+    packet.rssi = current_rssi;
+    packet.node_id = linkaddr_node_addr;
+    header.ttl = 3;
+    printf("SENT watch RSSI %d \n",(int)packet.rssi);
+    header.ack_no = clock_time();
+    int packet_size = sizeof(data_packet_header)
+            + sizeof(light_time_packet);
+    if(mmem_alloc(&mmem, packet_size) == 0) {
+      printf("memory allocation failed\n");
+    } else {
+      char * packet_ptr = (char *) MMEM_PTR(&mmem);
+      memcpy(packet_ptr,&header,sizeof(data_packet_header));
+      memcpy(packet_ptr+sizeof(data_packet_header),&packet,
+          sizeof(light_time_packet));
+      void * void_ptr = (void *) packet_ptr;
+      for (int i = 0; i < NUM_OF_CALC_REBROADCASTS; i++) {
+        t_rand = random_rand() % CLOCK_SECOND;
+        etimer_set(&randt, t_rand);
+        PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
+        packetbuf_copyfrom(void_ptr,packet_size);
+        broadcast_send(&broadcast_internode);
+
+      }
+      mmem_free(&mmem);
+    }
+  }
+  PROCESS_END();
+}
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
