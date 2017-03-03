@@ -55,6 +55,8 @@
 #define NODE_CACHE_SIZE 20
 #define DECISION_WINDOW CLOCK_SECOND * 2
 #define NUM_OF_CALC_REBROADCASTS 3
+#define NUM_OF_ANNOUNCE_REBROADCASTS 1
+#define INTERNODE_TTL 1
 bool light_on = false;
 int light_colour = COLOUR_CODE_WHITE;
 int light_intensity = 100;
@@ -179,7 +181,8 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
             process_exit(&calculation_process);
             process_start(&calculation_process,NULL);
             clear_element_array();
-            process_post_synch(&calculation_broadcast,PROCESS_EVENT_CONTINUE
+            printf("SHOULD CALL BROADCAST 200 HERE!!!\n");
+            process_post_synch(&calculation_broadcast,200
                 ,NULL );
           } else {
             printf("ignored repeated watch announce packet \n");
@@ -239,7 +242,8 @@ static struct broadcast_conn broadcast_watch;
 
 PROCESS(watch_listening_process, "Watch packet listening process");
 
-AUTOSTART_PROCESSES(&watch_listening_process, &internode_process);
+AUTOSTART_PROCESSES(&watch_listening_process, &internode_process,
+    &calculation_broadcast);
 //AUTOSTART_PROCESSES(&watch_listening_process);
 PROCESS_THREAD(watch_listening_process, ev, data)
 {
@@ -261,7 +265,6 @@ PROCESS_THREAD(internode_process, ev, data)
   PROCESS_BEGIN();
   clock_init();
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
-  process_start(&calculation_broadcast,NULL);
   PROCESS_END();
 }
 
@@ -269,12 +272,18 @@ PROCESS_THREAD(internode_process, ev, data)
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 
+static struct mmem mmem;
+char * packet_ptr_calc;
+void * void_ptr_calc;
+int loop_counter;
 PROCESS_THREAD(calculation_broadcast , ev, data)
 {
   PROCESS_BEGIN();
+  mmem_init();
   while(1) {
-    PROCESS_WAIT_EVENT();
-    static struct mmem mmem;
+    printf("calculation_broadcast called \n");
+    PROCESS_YIELD();
+    if (ev != 200) continue;
     mmem_init();
     data_packet_header header;
     header.system_code = SYSTEM_CODE;
@@ -284,7 +293,7 @@ PROCESS_THREAD(calculation_broadcast , ev, data)
     packet.timestamp = current_ack;
     packet.rssi = current_rssi;
     packet.node_id = linkaddr_node_addr;
-    header.ttl = 3;
+    header.ttl = INTERNODE_TTL;
     printf("SENT watch RSSI %d \n",(int)packet.rssi);
     header.ack_no = clock_time();
     int packet_size = sizeof(data_packet_header)
@@ -292,16 +301,19 @@ PROCESS_THREAD(calculation_broadcast , ev, data)
     if(mmem_alloc(&mmem, packet_size) == 0) {
       printf("memory allocation failed\n");
     } else {
-      char * packet_ptr = (char *) MMEM_PTR(&mmem);
-      memcpy(packet_ptr,&header,sizeof(data_packet_header));
-      memcpy(packet_ptr+sizeof(data_packet_header),&packet,
+      packet_ptr_calc = (char *) MMEM_PTR(&mmem);
+      memcpy(packet_ptr_calc,&header,sizeof(data_packet_header));
+      memcpy(packet_ptr_calc+sizeof(data_packet_header),&packet,
           sizeof(light_time_packet));
-      void * void_ptr = (void *) packet_ptr;
-      for (int i = 0; i < NUM_OF_CALC_REBROADCASTS; i++) {
-        t_rand = random_rand() % CLOCK_SECOND;
+      void_ptr_calc = (void *) packet_ptr_calc;
+      for (loop_counter = 0; loop_counter < NUM_OF_CALC_REBROADCASTS;
+          loop_counter++) {
+        printf("Sent the %i st time \n",loop_counter);
+        t_rand = random_rand() % CLOCK_SECOND/2;
         etimer_set(&randt, t_rand);
+        printf("broadcast internode sent \n");
         PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
-        packetbuf_copyfrom(void_ptr,packet_size);
+        packetbuf_copyfrom(void_ptr_calc,packet_size);
         broadcast_send(&broadcast_internode);
 
       }
@@ -325,8 +337,58 @@ void turn_off_led() {
   printf("turning off light! \n");
   light_on = false;
 }
-
+static struct mmem mmem2;
+char * packet_ptr_2;
+void * void_ptr_2;
+i
 PROCESS_THREAD(calculation_process, ev, data)
+{
+  PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
+  PROCESS_BEGIN();
+  etimer_set(&et, DECISION_WINDOW);
+  PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
+  broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
+  printf("calculation started - num of comparisons %i \n",curr_element_len);
+  linkaddr_t closest_node = linkaddr_node_addr;
+  float closest_rssi = current_rssi;
+  for (int i = 0; i < curr_element_len; i++) {
+    if (rssis[i].rssi > current_rssi)  {
+      current_rssi = rssis[i].rssi;
+      closest_node = rssis[i].node_id;
+      break;
+    }
+   }
+
+  data_packet_header header;
+  header.system_code = SYSTEM_CODE;
+  header.source_node_type = 1;
+  header.packet_type = ANNOUNCE_CLOSEST_PACKET;nnounce_packet announce;
+  announce_packet announce;
+  announce.closest_node = closest_node;
+  announce.num_comparisons = curr_element_len;
+  packet_ptr_2 = (char *) MMEM_PTR(&mmem2);
+      memcpy(packet_ptr_2,&header,sizeof(data_packet_header));
+      memcpy(packet_ptr_2+sizeof(data_packet_header),&packet,
+          sizeof(announce_packet));
+      void_ptr_2 = (void *) packet_ptr_2;
+      for (loop_counter = 0; loop_counter < NUM_OF_ANNOUNCE_REBROADCASTS;
+          loop_counter++) {
+        printf("Sent the %i  time \n",loop_counter);
+        t_rand = random_rand() % CLOCK_SECOND/2;
+        etimer_set(&randt, t_rand);
+        printf("broadcast announce sent \n");
+        PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
+        packetbuf_copyfrom(void_ptr_2,packet_size);
+        broadcast_send(&broadcast_internode);
+
+      }
+      mmem_free(&mmem);
+  PROCESS_END();
+}
+
+
+
+PROCESS_THREAD(negotiation_process, ev, data)
 {
   PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
   PROCESS_BEGIN();
@@ -356,6 +418,3 @@ PROCESS_THREAD(calculation_process, ev, data)
     }
   PROCESS_END();
 }
-
-
-

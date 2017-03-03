@@ -49,7 +49,8 @@ typedef struct {
 } light_time_packet;
 
 typedef struct {
-  int timestamp;
+  int num_comparisons;
+  linkaddr_t closest_node;
 } announce_packet;
 
 
