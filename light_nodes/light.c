@@ -54,10 +54,11 @@
 #define NUM_OTHER_LIGHTS 2
 #define NODE_CACHE_SIZE 20
 #define DECISION_WINDOW CLOCK_SECOND * 2
-#define NEGOTIATION_WINDOW CLOCK_SECOND
+#define NEGOTIATION_WINDOW CLOCK_SECOND * 2
 #define NUM_OF_CALC_REBROADCASTS 3
 #define NUM_OF_ANNOUNCE_REBROADCASTS 1
 #define INTERNODE_TTL 1
+
 bool light_on = false;
 int light_colour = COLOUR_CODE_WHITE;
 int light_intensity = 100;
@@ -68,6 +69,7 @@ int watch_timestamp = 0;
 int old_send_time = -1;
 
 PROCESS(calculation_process, "Watch Calculation process");
+PROCESS(negotiation_process , "Negotiation process");
 PROCESS(calculation_broadcast , "Calculation Broadcast");
 
 static struct broadcast_conn broadcast_internode;
@@ -363,7 +365,9 @@ void turn_off_led() {
 static struct mmem mmem2;
 char * packet_ptr_2;
 void * void_ptr_2;
-i
+linkaddr_t closest_node;
+float closest_rssi;
+
 PROCESS_THREAD(calculation_process, ev, data)
 {
   PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
@@ -372,40 +376,41 @@ PROCESS_THREAD(calculation_process, ev, data)
   PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
   printf("calculation started - num of comparisons %i \n",curr_element_len);
-  linkaddr_t closest_node = linkaddr_node_addr;
-  float closest_rssi = current_rssi;
+  closest_node = linkaddr_node_addr;
+  closest_rssi = current_rssi;
   for (int i = 0; i < curr_element_len; i++) {
-    if (rssis[i].rssi > current_rssi)  {
-      current_rssi = rssis[i].rssi;
+    if (rssis[i].rssi > closest_rssi)  {
+      closest_rssi = rssis[i].rssi;
       closest_node = rssis[i].node_id;
       break;
     }
    }
-
+  process_start(&negotiation_process,NULL);
   data_packet_header header;
   header.system_code = SYSTEM_CODE;
   header.source_node_type = 1;
   header.packet_type = ANNOUNCE_CLOSEST_PACKET;
-  announce_packet announce;
-  announce.closest_node = closest_node;
-  announce.num_comparisons = curr_element_len;
+  announce_packet packet;
+  packet.closest_node = closest_node;
+  packet.num_comparisons = curr_element_len;
   packet_ptr_2 = (char *) MMEM_PTR(&mmem2);
-      memcpy(packet_ptr_2,&header,sizeof(data_packet_header));
-      memcpy(packet_ptr_2+sizeof(data_packet_header),&packet,
-          sizeof(announce_packet));
-      void_ptr_2 = (void *) packet_ptr_2;
-      for (loop_counter = 0; loop_counter < NUM_OF_ANNOUNCE_REBROADCASTS;
-          loop_counter++) {
-        printf("Sent the %i  time \n",loop_counter);
-        t_rand = random_rand() % CLOCK_SECOND/2;
-        etimer_set(&randt, t_rand);
-        printf("broadcast announce sent \n");
-        PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
-        packetbuf_copyfrom(void_ptr_2,packet_size);
-        broadcast_send(&broadcast_internode);
+  memcpy(packet_ptr_2,&header,sizeof(data_packet_header));
+  memcpy(packet_ptr_2+sizeof(data_packet_header),&packet,
+      sizeof(announce_packet));
+  void_ptr_2 = (void *) packet_ptr_2;
+  for (loop_counter = 0; loop_counter < NUM_OF_ANNOUNCE_REBROADCASTS;
+      loop_counter++) {
+    printf("Sent the %i  time \n",loop_counter);
+    t_rand = random_rand() % CLOCK_SECOND/2;
+    etimer_set(&randt, t_rand);
+    printf("broadcast announce sent \n");
+    int packet_size = sizeof(data_packet_header) + sizeof(announce_packet);
+    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
+    packetbuf_copyfrom(void_ptr_2,packet_size);
+    broadcast_send(&broadcast_internode);
 
-      }
-      mmem_free(&mmem);
+  }
+  mmem_free(&mmem2);
   PROCESS_END();
 }
 
@@ -415,8 +420,7 @@ PROCESS_THREAD(negotiation_process, ev, data)
 {
   PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
   PROCESS_BEGIN();
-  printf("clock start \n");
-  etimer_set(&et, NEGOTIATION_WINDOW);
+  etimer_set(&et, DECISION_WINDOW);
   PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
     printf("calculation started - num of comparisons %i \n",curr_element_len);
