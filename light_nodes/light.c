@@ -211,13 +211,13 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
   memcpy(&data_header,packetbuf_dataptr(),sizeof(data_packet_header));
   char * char_ptr;
   if (data_header.system_code == SYSTEM_CODE)  {
-    printf("received internode \n");
     switch (data_header.packet_type)  {
       case INTER_NODE_PACKET:
         char_ptr = (char *) packetbuf_dataptr();
         memcpy(&data_time, char_ptr+sizeof(data_packet_header),
           sizeof(light_time_packet));
         if (data_time.timestamp > current_ack)  {
+          printf(" Received newer timestamp, resetting decision period \n");
           current_ack = data_time.timestamp;
           etimer_set(&et, DECISION_WINDOW);
           clear_element_array();
@@ -232,8 +232,6 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
           printf("Current cache length %i\n", curr_element_len +1);
         }
 
-        retransmit_settings(packetbuf_dataptr(), sizeof(data_packet_header)
-           + sizeof(light_time_packet), c);
         break;
       case ANNOUNCE_CLOSEST_PACKET:
         char_ptr = (char *) packetbuf_dataptr();
@@ -255,8 +253,17 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
               announce.closest_node.u8[0],announce.closest_node.u8[1]);
           printf("Current announce cache length %i\n", curr_announce_elem_len +1);
         }
-      default:
         break;
+      default:
+        printf("received unknown system packet \n");
+        break;
+      if (data_time.timestamp < current_ack)  {
+        printf("Dropped old packet \n");
+      }  else {
+
+        retransmit_settings(packetbuf_dataptr(), sizeof(data_packet_header)
+          + sizeof(light_time_packet), c);
+      }
     }
   }
 }
@@ -322,7 +329,7 @@ PROCESS_THREAD(calculation_broadcast , ev, data)
     packet.node_id = linkaddr_node_addr;
     header.ttl = INTERNODE_TTL;
     printf("SENT watch RSSI %d \n",(int)packet.rssi);
-    header.ack_no = clock_time();
+    header.ack_no = current_ack;
     int packet_size = sizeof(data_packet_header)
             + sizeof(light_time_packet);
     if(mmem_alloc(&mmem, packet_size) == 0) {
@@ -392,6 +399,7 @@ PROCESS_THREAD(calculation_process, ev, data)
   header.system_code = SYSTEM_CODE;
   header.source_node_type = 1;
   header.packet_type = ANNOUNCE_CLOSEST_PACKET;
+  header.ack_no = current_ack;
   announce_packet packet;
   packet.closest_node = closest_node;
   packet.num_comparisons = curr_element_len;
