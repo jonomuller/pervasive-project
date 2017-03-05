@@ -54,10 +54,10 @@
 #define NUM_OTHER_LIGHTS 2
 #define NODE_CACHE_SIZE 20
 #define DECISION_WINDOW CLOCK_SECOND * 2
-#define NEGOTIATION_WINDOW CLOCK_SECOND * 2
+#define NEGOTIATION_WINDOW CLOCK_SECOND * 4
 #define NUM_OF_CALC_REBROADCASTS 3
-#define NUM_OF_ANNOUNCE_REBROADCASTS 1
-#define INTERNODE_TTL 1
+#define NUM_OF_ANNOUNCE_REBROADCASTS 2
+#define INTERNODE_TTL 2
 
 bool light_on = false;
 int light_colour = COLOUR_CODE_WHITE;
@@ -412,9 +412,9 @@ PROCESS_THREAD(calculation_process, ev, data)
         loop_counter++) {
       printf("Sent the %i  time \n",loop_counter);
       t_rand = random_rand() % CLOCK_SECOND/2;
-      //etimer_set(&randt, t_rand);
+      etimer_set(&randt, t_rand);
       printf("Decided closest , broadcasting decision \n");
-      //PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
+      PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
       packetbuf_copyfrom(void_ptr_2,packet_size);
       broadcast_send(&broadcast_internode);
 
@@ -445,6 +445,8 @@ PROCESS_THREAD(negotiation_process, ev, data)
       break;
     }
   }
+  // Reset array
+  curr_announce_elem_len = 0;
   bool is_closest = linkaddr_cmp(&linkaddr_node_addr,&negotiated_closest_node)
     != 0;
   if (is_closest) {
