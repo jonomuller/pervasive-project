@@ -8,6 +8,9 @@ PROCESS(watch_listening_process, "Watch packet listening process");
 AUTOSTART_PROCESSES(&watch_listening_process, &internode_process,
     &calculation_broadcast);
 
+int get_time() {
+  return clock_time() / time_of_announce;
+}
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -27,7 +30,7 @@ void retransmit_settings(void * packet, int size,
   if (header->ttl > 0)  {
     header->ttl -= 1;
 
-    //printf("retrasmitting packet %i %i \n",header->ack_no,header->ttl);
+    //printf("[%i][%i secs]retrasmitting packet %i %i \n",header->ack_no,header->ttl);
     packetbuf_copyfrom(packet,size);
 
     broadcast_send(broadcast);
@@ -59,7 +62,7 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
     }
     if (data_header.ack_no >= last_ack) {
       last_ack = data_header.ack_no;
-      //printf("received light system packet \n");
+      //printf("[%i][%i secs]received light system packet \n");
       switch (data_header.packet_type)  {
         case LIGHT_SETTINGS_PACKET:
           printf("\n");
@@ -86,7 +89,7 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
           break;
         case ON_PACKET:
           hid_on();
-          printf("[WATCH COMMAND] ON RECEIVED\n");
+          printf("[%i][%i secs][WATCH COMMAND] ON RECEIVED\n",get_time(),get_time()/CLOCK_SECOND);
           light_on = true;
           retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header)
               + sizeof(light_settings_packet),c);
@@ -94,12 +97,14 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
         case OFF_PACKET:
           hid_off();
           light_on = false;
-          printf("[WATCH COMMAND] OFF RECEIVED\n");
+          printf("[%i][%i secs][WATCH COMMAND] OFF RECEIVED\n",get_time(),get_time()/CLOCK_SECOND);
           retransmit_settings(packetbuf_dataptr(),sizeof(data_packet_header),c);
           break;
         case WATCH_ANNOUNCE_PACKET:
-          rssi_from_watch = packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536.0;
           if (data_header.ack_no > current_ack)  {
+            printf("[0][0][WATCH COMMAND] RECEIVED NEW WATCH ANNOUNCE, RESET CLOCK\n");
+            time_of_announce = clock_time();
+            rssi_from_watch = packetbuf_attr(PACKETBUF_ATTR_RSSI) - 65536.0;
             current_ack = data_header.ack_no;
             current_rssi = rssi_from_watch;
             process_exit(&calculation_process);
@@ -108,7 +113,8 @@ static void watch_recv(struct broadcast_conn *c, const linkaddr_t *from)
             process_post_synch(&calculation_broadcast,200
                 ,NULL );
           } else {
-            printf("[WATCH COMMAND] IGNORED REPEAT WATCH ANNOUNCE PACKET \n");
+            printf("[%i][%i secs][WATCH COMMAND] IGNORED REPEAT WATCH ANNOUNCE PACKET \n"
+              ,get_time(),get_time()/CLOCK_SECOND);
           }
         default:
           break;
@@ -132,7 +138,8 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
         memcpy(&data_time, char_ptr+sizeof(data_packet_header),
           sizeof(light_time_packet));
         if (data_time.timestamp > current_ack)  {
-          printf("[INTERNODE UPDATE] NEW TIMESTAMP RECEIVED - RESET \n");
+          printf("[%i][%i secs][INTERNODE UPDATE] NEW TIMESTAMP RECEIVED - RESET \n"
+            ,get_time(),get_time()/CLOCK_SECOND);
           current_ack = data_time.timestamp;
           etimer_set(&et, DECISION_WINDOW);
           curr_element_len = 0;
@@ -142,11 +149,13 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
             !node_in_array(data_time.node_id))  {
           rssis[curr_element_len] = data_time;
           curr_element_len++;
-          printf("[INTERNODE UPDATE] RECEIVED RSSI OF %i FROM %d.%d \n",(int) data_time.rssi
+          printf("[%i][%i secs][INTERNODE UPDATE] RECEIVED RSSI OF %i FROM %d.%d \n",get_time()
+            ,get_time()/CLOCK_SECOND,(int) data_time.rssi
             , data_time.node_id.u8[0],data_time.node_id.u8[1]);
         }
        if (data_header.ack_no < current_ack)  {
-         printf("[INTERNODE UPDATE] DROPPED PACKET %i, CURRENT ACK is %i\n",
+         printf("[%i][%i secs][INTERNODE UPDATE] DROPPED PACKET %i, CURRENT ACK is %i\n",get_time()
+           ,get_time()/CLOCK_SECOND,
            data_header.ack_no, current_ack);
        }  else {
          retransmit_settings(packetbuf_dataptr(), sizeof(data_packet_header)
@@ -161,15 +170,16 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
         if (data_header.ack_no == current_ack)  {
           announcers[curr_announce_elem_len] = announce;
           curr_announce_elem_len++;
-          printf("[INTERNODE UPDATE] RECEIVED %i COMPARISONS FROM %d.%d \n",
+          printf("[%i][%i secs][INTERNODE UPDATE] RECEIVED %i COMPARISONS FROM %d.%d \n"
+            ,get_time(),get_time()/CLOCK_SECOND,
             (int) announce.num_comparisons,
             announce.closest_node.u8[0],announce.closest_node.u8[1]);
         } else {
-          printf("[INTERNODE UPDATE] ANNOUNCE %i DROPPED , CURRENT ACK is %i\n",
-            data_header.ack_no, current_ack);
+          printf("[%i][%i secs][INTERNODE UPDATE] ANNOUNCE %i DROPPED , CURRENT ACK is %i\n"
+          ,get_time(),get_time()/CLOCK_SECOND, data_header.ack_no, current_ack);
         }
         if (data_header.ack_no < current_ack)  {
-          //printf("Dropped old packet \n");
+          //printf("[%i][%i secs]Dropped old packet \n");
         }  else {
           retransmit_settings(packetbuf_dataptr(), sizeof(data_packet_header)
             + sizeof(announce_packet), c);
@@ -225,7 +235,7 @@ PROCESS_THREAD(calculation_broadcast , ev, data)
   PROCESS_BEGIN();
   mmem_init();
   while(1) {
-    //printf("calculation_broadcast called \n");
+    //printf("[%i][%i secs]calculation_broadcast called \n");
     PROCESS_YIELD();
     if (ev != 200) continue;
     data_packet_header header;
@@ -243,7 +253,7 @@ PROCESS_THREAD(calculation_broadcast , ev, data)
     int packet_size = sizeof(data_packet_header)
             + sizeof(light_time_packet);
     if(mmem_alloc(&mmem, packet_size) == 0) {
-      printf("[ERROR] memory allocation failed\n");
+      printf("[%i][%i secs][ERROR] memory allocation failed\n",get_time(),get_time()/CLOCK_SECOND);
     } else {
       packet_ptr_calc = (char *) MMEM_PTR(&mmem);
       memcpy(packet_ptr_calc,&header,sizeof(data_packet_header));
@@ -252,11 +262,11 @@ PROCESS_THREAD(calculation_broadcast , ev, data)
       void_ptr_calc = (void *) packet_ptr_calc;
       for (loop_counter = 0; loop_counter < NUM_OF_CALC_REBROADCASTS;
           loop_counter++) {
-        //printf("Sent the %i st time \n",loop_counter);
+        //printf("[%i][%i secs]Sent the %i st time \n",loop_counter);
         t_rand = random_rand() % CLOCK_SECOND/2;
         etimer_set(&randt, t_rand);
         PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
-        printf("[INTERNODE UPDATE] SENT RSSI %d \n",(int)packet.rssi);
+        printf("[%i][%i secs][INTERNODE UPDATE] SENT RSSI %d \n",get_time(),get_time()/CLOCK_SECOND,(int)packet.rssi);
         packetbuf_copyfrom(void_ptr_calc,packet_size);
         broadcast_send(&broadcast_internode);
 
@@ -272,13 +282,13 @@ PROCESS_THREAD(calculation_broadcast , ev, data)
 
 void turn_on_led()  {
 					hid_on();
-          //printf("Turning on light!");
-          //printf("Received On command \n");
+          //printf("[%i][%i secs]Turning on light!");
+          //printf("[%i][%i secs]Received On command \n");
 }
 
 void turn_off_led() {
   hid_off();
-  //printf("turning off light! \n");
+  //printf("[%i][%i secs]turning off light! \n");
   light_on = false;
 }
 static struct mmem mmem2;
@@ -294,7 +304,8 @@ PROCESS_THREAD(calculation_process, ev, data)
   etimer_set(&et, DECISION_WINDOW);
   PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
-  printf("[CALCULATION] STARTED WITH %i COMPARISONS \n",curr_element_len);
+  printf("[%i][%i secs][CALCULATION] STARTED WITH %i COMPARISONS \n",get_time()
+    ,get_time()/CLOCK_SECOND,curr_element_len);
   closest_node = linkaddr_node_addr;
   closest_rssi = current_rssi;
   for (int i = 0; i < curr_element_len; i++) {
@@ -316,7 +327,7 @@ PROCESS_THREAD(calculation_process, ev, data)
   packet.num_comparisons = curr_element_len;
   int packet_size = sizeof(data_packet_header) + sizeof(announce_packet);
   if(mmem_alloc(&mmem2, packet_size) == 0) {
-      printf("[ERROR] memory allocation failed\n");
+      printf("[%i][%i secs][ERROR] memory allocation failed\n",get_time(),get_time()/CLOCK_SECOND);
   } else {
 
     packet_ptr_2 = (char *) MMEM_PTR(&mmem2);
@@ -326,11 +337,11 @@ PROCESS_THREAD(calculation_process, ev, data)
     void_ptr_2 = (void *) packet_ptr_2;
     for (loop_counter = 0; loop_counter < NUM_OF_ANNOUNCE_REBROADCASTS;
         loop_counter++) {
-      //printf("Sent the %i  time \n",loop_counter);
+      //printf("[%i][%i secs]Sent the %i  time \n",loop_counter);
       t_rand = random_rand() % CLOCK_SECOND/2;
       etimer_set(&randt, t_rand);
-      printf("[CALCULATION] DETERMINED NODE %d.%d IS CLOSEST - BROADCASTING RESULT \n",
-        closest_node.u8[0],closest_node.u8[1]);
+      printf("[%i][%i secs][CALCULATION] DETERMINED NODE %d.%d IS CLOSEST - BROADCASTING RESULT \n"
+        ,get_time(),get_time()/CLOCK_SECOND,closest_node.u8[0],closest_node.u8[1]);
       PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
       packetbuf_copyfrom(void_ptr_2,packet_size);
       broadcast_send(&broadcast_internode);
@@ -348,11 +359,12 @@ PROCESS_THREAD(negotiation_process, ev, data)
   PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
   PROCESS_BEGIN();
   etimer_set(&et3, NEGOTIATION_WINDOW);
-  printf("[DECISION TIME] DECISION WINDOW STARTED %i SECONDS\n ", NEGOTIATION_WINDOW
-      / CLOCK_SECOND);
+  printf("[%i][%i secs][DECISION TIME] DECISION WINDOW STARTED %i SECONDS\n ",get_time(),get_time()/CLOCK_SECOND
+     , NEGOTIATION_WINDOW/ CLOCK_SECOND);
   PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et3));
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
-  printf("[DECISION TIME] CHOOSING CLOSEST - %i COMPARISONS \n",curr_announce_elem_len);
+  printf("[%i][%i secs][DECISION TIME] CHOOSING CLOSEST - %i COMPARISONS \n",get_time(),get_time()/CLOCK_SECOND
+    ,curr_announce_elem_len);
   linkaddr_t negotiated_closest_node = closest_node;
   int negotiated_comp = curr_element_len;
   for (int i = 0; i < curr_announce_elem_len; i++) {
@@ -367,7 +379,7 @@ PROCESS_THREAD(negotiation_process, ev, data)
   bool is_closest = linkaddr_cmp(&linkaddr_node_addr,&negotiated_closest_node)
     != 0;
   if (is_closest) {
-    printf("[DECISION TIME] COMPUTED THAT I AM THE CLOSEST \n");
+    printf("[%i][%i secs][DECISION TIME] COMPUTED THAT I AM THE CLOSEST \n",get_time(),get_time()/CLOCK_SECOND);
     if (light_on) {
       // turn_on_led();
       // change colour to green

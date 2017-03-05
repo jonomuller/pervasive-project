@@ -88,3 +88,5 @@ static struct mmem mmem;
 char * packet_ptr_calc;
 void * void_ptr_calc;
 int loop_counter;
+
+int time_of_announce=-1;
