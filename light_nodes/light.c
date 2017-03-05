@@ -234,6 +234,7 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
 
         retransmit_settings(packetbuf_dataptr(), sizeof(data_packet_header)
            + sizeof(light_time_packet), c);
+        break;
       case ANNOUNCE_CLOSEST_PACKET:
         char_ptr = (char *) packetbuf_dataptr();
         memcpy(&announce, char_ptr + sizeof(data_packet_header),
@@ -422,6 +423,8 @@ PROCESS_THREAD(negotiation_process, ev, data)
   PROCESS_EXITHANDLER(broadcast_close(&broadcast_internode));
   PROCESS_BEGIN();
   etimer_set(&et3, NEGOTIATION_WINDOW);
+  printf("started negotiation time, wait %i\n ", NEGOTIATION_WINDOW
+      / CLOCK_SECOND);
   PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et3));
   broadcast_open(&broadcast_internode, INTER_NODE_CHANNEL, &internode_callbacks);
   printf("decisions started - num of comparisons %i \n",curr_announce_elem_len);
