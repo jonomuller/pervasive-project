@@ -235,23 +235,18 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
         break;
       case ANNOUNCE_CLOSEST_PACKET:
         char_ptr = (char *) packetbuf_dataptr();
+        printf("received announce packet \n");
         memcpy(&announce, char_ptr + sizeof(data_packet_header),
           sizeof(announce));
 
-        if (data_header.ack_no > current_ack)  {
-          current_ack = data_header.ack_no;
-          etimer_set(&et, NEGOTIATION_WINDOW);
-          clear_element_array();
-        }
-
-        if (data_header.ack_no == current_ack &&
-            linkaddr_cmp(&announce.closest_node,&linkaddr_node_addr) == 0 &&
-            !node_in_array(announce.closest_node))  {
+        if (data_header.ack_no == current_ack)  {
           announcers[curr_announce_elem_len] = announce;
           curr_announce_elem_len++;
           printf("Received num_comparisons of %i from %d.%d\n",(int) announce.num_comparisons,
               announce.closest_node.u8[0],announce.closest_node.u8[1]);
           printf("Current announce cache length %i\n", curr_announce_elem_len +1);
+        } else {
+          printf("we dropped an announce for some reason\n");
         }
         break;
       default:
@@ -318,7 +313,6 @@ PROCESS_THREAD(calculation_broadcast , ev, data)
     printf("calculation_broadcast called \n");
     PROCESS_YIELD();
     if (ev != 200) continue;
-    mmem_init();
     data_packet_header header;
     header.system_code = SYSTEM_CODE;
     header.source_node_type = 1;
@@ -345,8 +339,8 @@ PROCESS_THREAD(calculation_broadcast , ev, data)
         printf("Sent the %i st time \n",loop_counter);
         t_rand = random_rand() % CLOCK_SECOND/2;
         etimer_set(&randt, t_rand);
-        printf("broadcast internode sent \n");
         PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
+        printf("broadcast internode sent \n");
         packetbuf_copyfrom(void_ptr_calc,packet_size);
         broadcast_send(&broadcast_internode);
 
@@ -400,27 +394,33 @@ PROCESS_THREAD(calculation_process, ev, data)
   header.source_node_type = 1;
   header.packet_type = ANNOUNCE_CLOSEST_PACKET;
   header.ack_no = current_ack;
+  header.ttl = INTERNODE_TTL;
   announce_packet packet;
   packet.closest_node = closest_node;
   packet.num_comparisons = curr_element_len;
-  packet_ptr_2 = (char *) MMEM_PTR(&mmem2);
-  memcpy(packet_ptr_2,&header,sizeof(data_packet_header));
-  memcpy(packet_ptr_2+sizeof(data_packet_header),&packet,
-      sizeof(announce_packet));
-  void_ptr_2 = (void *) packet_ptr_2;
-  for (loop_counter = 0; loop_counter < NUM_OF_ANNOUNCE_REBROADCASTS;
-      loop_counter++) {
-    printf("Sent the %i  time \n",loop_counter);
-    t_rand = random_rand() % CLOCK_SECOND/2;
-    etimer_set(&randt, t_rand);
-    printf("broadcast announce sent \n");
-    int packet_size = sizeof(data_packet_header) + sizeof(announce_packet);
-    PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
-    packetbuf_copyfrom(void_ptr_2,packet_size);
-    broadcast_send(&broadcast_internode);
+  int packet_size = sizeof(data_packet_header) + sizeof(announce_packet);
+  if(mmem_alloc(&mmem2, packet_size) == 0) {
+      printf("memory allocation failed\n");
+  } else {
 
+    packet_ptr_2 = (char *) MMEM_PTR(&mmem2);
+    memcpy(packet_ptr_2,&header,sizeof(data_packet_header));
+    memcpy(packet_ptr_2+sizeof(data_packet_header),&packet,
+        sizeof(announce_packet));
+    void_ptr_2 = (void *) packet_ptr_2;
+    for (loop_counter = 0; loop_counter < NUM_OF_ANNOUNCE_REBROADCASTS;
+        loop_counter++) {
+      printf("Sent the %i  time \n",loop_counter);
+      t_rand = random_rand() % CLOCK_SECOND/2;
+      //etimer_set(&randt, t_rand);
+      printf("Decided closest , broadcasting decision \n");
+      //PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
+      packetbuf_copyfrom(void_ptr_2,packet_size);
+      broadcast_send(&broadcast_internode);
+
+    }
+    mmem_free(&mmem2);
   }
-  mmem_free(&mmem2);
   PROCESS_END();
 }
 
