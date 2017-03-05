@@ -231,6 +231,12 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
               data_time.node_id.u8[0],data_time.node_id.u8[1]);
           printf("Current cache length %i\n", curr_element_len +1);
         }
+       if (data_time.timestamp < current_ack)  {
+         printf("Dropped old packet \n");
+       }  else {
+         retransmit_settings(packetbuf_dataptr(), sizeof(data_packet_header)
+          + sizeof(light_time_packet), c);
+       }
 
         break;
       case ANNOUNCE_CLOSEST_PACKET:
@@ -248,6 +254,14 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
         } else {
           printf("we dropped an announce for some reason\n");
         }
+        if (data_time.timestamp < current_ack)  {
+          printf("Dropped old packet \n");
+        }  else {
+
+          retransmit_settings(packetbuf_dataptr(), sizeof(data_packet_header)
+            + sizeof(announce_packet), c);
+        }
+
         break;
       default:
         printf("received unknown system packet \n");
@@ -256,8 +270,6 @@ static void internode_recv(struct broadcast_conn *c, const linkaddr_t *from)
         printf("Dropped old packet \n");
       }  else {
 
-        retransmit_settings(packetbuf_dataptr(), sizeof(data_packet_header)
-          + sizeof(light_time_packet), c);
       }
     }
   }
