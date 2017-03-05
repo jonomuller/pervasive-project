@@ -9,7 +9,7 @@ AUTOSTART_PROCESSES(&watch_listening_process, &internode_process,
     &calculation_broadcast);
 
 int get_time() {
-  return clock_time() / time_of_announce;
+  return clock_time() - time_of_announce;
 }
 
 /*---------------------------------------------------------------------------*/
