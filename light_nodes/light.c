@@ -260,13 +260,14 @@ PROCESS_THREAD(calculation_broadcast , ev, data)
       memcpy(packet_ptr_calc+sizeof(data_packet_header),&packet,
           sizeof(light_time_packet));
       void_ptr_calc = (void *) packet_ptr_calc;
+
+      printf("[%i][%i secs][INTERNODE UPDATE] SENT RSSI %i \n",get_time(),get_time()/CLOCK_SECOND,(int)packet.rssi);
       for (loop_counter = 0; loop_counter < NUM_OF_CALC_REBROADCASTS;
           loop_counter++) {
         //printf("[%i][%i secs]Sent the %i st time \n",loop_counter);
         t_rand = random_rand() % CLOCK_SECOND/2;
         etimer_set(&randt, t_rand);
         PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&randt));
-        printf("[%i][%i secs][INTERNODE UPDATE] SENT RSSI %d \n",get_time(),get_time()/CLOCK_SECOND,(int)packet.rssi);
         packetbuf_copyfrom(void_ptr_calc,packet_size);
         broadcast_send(&broadcast_internode);
 
